@@ -29,6 +29,7 @@
 ```text
 docs/
   specs/          已確認嘅產品同技術規格
+  plans/          可執行實作計劃
   operations/     人手同自動化營運流程
   decisions/      重要決策紀錄
   vision/         長遠目標、擴展路線、階段門檻
