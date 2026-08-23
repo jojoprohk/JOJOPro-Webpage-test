@@ -1,30 +1,28 @@
-# Content Templates
+# 內容同營運模板
 
-Last updated: 2026-08-23
+最後更新：2026-08-23
 
-## Source Intake Message
-
-Send this to contributors when asking them to forward posts:
+## 1. 邀請貢獻者收料訊息
 
 ```text
 直接將場地貼文 forward 俾呢個 bot 就可以。
-最好包括：日期、地區、場地名、價錢、幾多粒/尺寸、可唔可以賣食品、聯絡方法。
+最好包括：日期、地區、場地名、價錢、幾多粒／尺寸、可唔可以賣食品、聯絡方法。
 資料未齊都唔緊要，系統會整理後再等我確認。
 ```
 
-## Review Checklist
+## 2. 審核清單
 
-Before approving a listing, check:
+批准 listing 前檢查：
 
-- Is the venue or district clear?
-- Are the dates still current?
-- Is the price copied accurately?
-- Is the contact method the one from the source?
-- Are product restrictions captured?
-- Is the source label correct?
-- Is anything likely to mislead a tenant?
+- 場地或地區係咪清楚？
+- 日期係咪仍然有效？
+- 價錢有冇抄錯？
+- 聯絡方法係咪來自原始貼文？
+- 產品限制有冇記低？
+- 來源標籤係咪正確？
+- 有冇任何會誤導檔主嘅內容？
 
-## Instagram Caption Template
+## 3. Instagram 文案模板
 
 ```text
 【{post_type_title}】
@@ -44,7 +42,7 @@ Before approving a listing, check:
 聯絡前請自行確認檔期、價錢、按金同產品限制。
 ```
 
-## Weekly Roundup Template
+## 4. 每週精選模板
 
 ```text
 【本週{theme}場地精選】
@@ -57,7 +55,7 @@ Before approving a listing, check:
 所有檔期同價錢以場地聯絡人覆核為準。
 ```
 
-## Disclaimer Line
+## 5. 免責聲明
 
 ```text
 JoPoJo 只整理場地資訊，不代收租金、不持有按金、不代簽合約。聯絡前請自行確認檔期、價錢、按金、用途限制同場地資格。

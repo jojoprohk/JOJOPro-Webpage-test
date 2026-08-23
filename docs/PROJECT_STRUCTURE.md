@@ -1,65 +1,65 @@
-# JoPoJo Project Structure Rules
+# JoPoJo 項目結構規範
 
-Last updated: 2026-08-23
+最後更新：2026-08-23
 
-## Purpose
+## 1. 項目目的
 
-This project starts as an AI-assisted Hong Kong short-term booth, pop-up, and exhibition-space information service.
+呢個項目第一階段係做一個 AI 輔助嘅香港短租舖位、booth、pop-up、展銷場地情報營運系統。
 
-The first product is not a full marketplace. It is a controlled intake and publishing workflow:
+第一版唔係完整 marketplace，而係一個可控嘅收料、整理、審核、發布流程：
 
-1. Receive venue posts from a Telegram bot.
-2. Use AI to extract structured fields.
-3. Let Mercy review and edit.
-4. Publish approved listings to a website.
-5. Generate social post drafts for Instagram and Facebook.
+1. 透過 Telegram bot 接收場地貼文。
+2. 用 AI 抽取結構化欄位。
+3. 由 Mercy 審核同修改。
+4. 審批後發布去網站。
+5. 自動產生 Instagram 同 Facebook 帖文草稿。
 
-## Hard Constraints
+## 2. 硬性約束
 
-- Solo operation only.
-- Keep cash spend minimal before validating demand.
-- Do not hold rent, deposits, or buyer payments.
-- Do not sign contracts on behalf of users.
-- Do not use unofficial WhatsApp automation that risks account bans.
-- Do not commit raw chat exports, phone numbers, API keys, tokens, or personal data.
-- Every user-facing listing must show its source and last-updated time.
+- 以一人公司營運為前提。
+- 未驗證需求前，現金成本要保持最低。
+- 唔代收租金、按金或任何交易款項。
+- 唔代任何一方簽合約。
+- 唔用非官方 WhatsApp 自動化工具，避免封號。
+- 唔可以將原始對話匯出、電話號碼、API keys、tokens 或個人資料放入 Git。
+- 每個公開 listing 必須顯示資料來源同最後更新時間。
 
-## Folder Rules
+## 3. 資料夾規則
 
 ```text
 docs/
-  specs/          Approved product and technical specs
-  operations/     Manual and automated operating procedures
-  decisions/      Short records of important decisions
+  specs/          已確認嘅產品同技術規格
+  operations/     人手同自動化營運流程
+  decisions/      重要決策紀錄
 
 apps/
-  web/            Public website and review console
+  web/            公開網站同審核後台
 
 packages/
-  ai/             Shared parsing and content-generation logic
+  ai/             AI 解析同內容生成共用邏輯
 
 supabase/
-  migrations/     Database schema changes
+  migrations/     資料庫 schema 變更
 ```
 
-## Data Rules
+## 4. 資料處理規則
 
-- Raw messages go to the database or local ignored storage, never Git.
-- Public listings should contain only information that a venue operator or source has already published for rental promotion.
-- Phone numbers and WhatsApp links may be displayed when included in the original promotional post, but the platform does not verify ownership unless a later verified-source process exists.
-- AI-generated fields must keep confidence markers until Mercy approves them.
-- Approved listings must have a source URL, source type, source label, and last-reviewed timestamp.
+- 原始訊息只可以放入資料庫或本機 ignored 儲存空間，唔可以入 Git。
+- 公開 listing 只可以包含場地負責人或資料來源已經主動公開發布嘅租務資訊。
+- 如果原始貼文已有電話或 WhatsApp link，可以顯示；但平台唔保證對方身份，除非日後有另行授權嘅認證流程。
+- AI 產生欄位必須保留信心標記，直到 Mercy 審批。
+- 已審批 listing 必須有 `source_url`、`source_type`、`source_label` 同 `last_reviewed_at`。
 
-## Naming Rules
+## 5. 命名規則
 
-- Code, commands, and database fields use English.
-- User-facing copy uses Cantonese/Traditional Chinese by default.
-- File names use kebab-case.
-- Dates use `YYYY-MM-DD`.
+- 程式碼、指令、資料庫欄位用英文。
+- 用戶介面同文件預設用繁體中文／廣東話。
+- 檔名用 kebab-case。
+- 日期格式用 `YYYY-MM-DD`。
 
-## Cleanup Rules
+## 6. 清理規則
 
-- Temporary downloads go to `/tmp` or another ignored folder.
-- Each spec must state what is out of scope.
-- Remove stale automation drafts once a stable workflow is documented.
-- Before changing a workflow rule, update the relevant document first.
+- 暫存下載檔案放入 `/tmp` 或其他 ignored 位置。
+- 每份規格必須寫清楚「唔做啲咩」。
+- 自動化流程穩定後，要清理過期草稿。
+- 改任何流程規則前，先更新相關文件，再改實作。

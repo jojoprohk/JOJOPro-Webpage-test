@@ -2,20 +2,20 @@
 .env.*
 !.env.example
 
-# Local exports and raw personal data must never enter the repo.
+# 原始匯出檔案同個人資料，一律唔可以入 Git。
 raw/
 exports/
 *.whatsapp.zip
 *.waexport
 
-# Build and tooling
+# 建置同工具檔案
 node_modules/
 .next/
 dist/
 coverage/
 .vercel/
 
-# OS/editor
+# 作業系統／編輯器
 .DS_Store
 .idea/
 .vscode/

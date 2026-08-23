@@ -1,23 +1,23 @@
-# ADR: Use Telegram Intake Before WhatsApp API
+# 決策：先用 Telegram 做收料入口
 
-Date: 2026-08-23
+日期：2026-08-23
 
-## Decision
+## 決定
 
-Use a Telegram bot as the first automated intake channel for venue posts. Do not use WhatsApp Business App scraping or unofficial automation.
+第一階段用 Telegram bot 做自動收料入口，唔用 WhatsApp Business App 抓取，亦唔用非官方 WhatsApp 自動化工具。
 
-## Reason
+## 原因
 
-Mercy already has a WhatsApp Business App number for human outreach, but WhatsApp Business App does not provide a stable official API for outside systems to read messages automatically. Unofficial automation risks account bans.
+Mercy 現有 WhatsApp Business App 號碼適合做人手聯絡，但 WhatsApp Business App 本身冇提供穩定官方 API 畀外部系統自動讀取訊息。用非官方工具 hook 入去有封號風險，對早期項目唔值得。
 
-Telegram bots are free, stable, and easy to connect to AI and a database. The MVP mainly needs Mercy and trusted contributors to forward posts, so Telegram is sufficient for validation.
+Telegram bot 免費、穩定、容易接 AI 同資料庫。MVP 主要靠 Mercy 同可信貢獻者 forward 貼文，所以 Telegram 足夠做驗證。
 
-## Later Review
+## 30 日後再檢討
 
-Revisit WhatsApp Cloud API or a provider after 30 days if:
+如果達到以下條件，再考慮用獨立號碼接 WhatsApp Cloud API 或正式服務商：
 
-- 20+ valid posts arrive per week;
-- venue operators ask to send posts directly through WhatsApp;
-- the intake workflow clearly saves time.
+- 每星期有 20 條以上有效場地貼文；
+- 場地搞手或代理人主動要求用 WhatsApp send 資料；
+- 收料流程明顯節省 Mercy 時間。
 
-At that point, use a separate number for the bot and keep Mercy's existing WhatsApp Business App number for human contact.
+到時都要保留現有 WhatsApp Business App 號碼做人手聯絡，bot 要用另一個獨立號碼。
