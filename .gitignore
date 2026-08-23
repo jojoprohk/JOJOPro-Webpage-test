@@ -1,0 +1,21 @@
+.env
+.env.*
+!.env.example
+
+# Local exports and raw personal data must never enter the repo.
+raw/
+exports/
+*.whatsapp.zip
+*.waexport
+
+# Build and tooling
+node_modules/
+.next/
+dist/
+coverage/
+.vercel/
+
+# OS/editor
+.DS_Store
+.idea/
+.vscode/
