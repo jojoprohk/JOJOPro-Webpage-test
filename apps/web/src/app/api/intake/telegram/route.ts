@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { assertTelegramWebhookSecret } from "../../../../lib/env";
+import {
+  assertTelegramWebhookSecret,
+  getTelegramAllowedChatIds,
+} from "../../../../lib/env";
 import { createOpenAiVenueCompleter } from "../../../../lib/openai-venue-completer";
 import { processTelegramIntake } from "../../../../lib/telegram-intake-service";
 import type { TelegramUpdate } from "../../../../lib/telegram-parser";
@@ -32,6 +35,7 @@ export async function POST(request: Request) {
       update,
       completeJson,
       repository,
+      allowedChatIds: getTelegramAllowedChatIds(),
     });
 
     return NextResponse.json({ ok: true, result });

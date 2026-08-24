@@ -16,3 +16,13 @@ export function assertTelegramWebhookSecret(secret: string | null) {
 
   return timingSafeEqual(secretBuffer, expectedBuffer);
 }
+
+export function getTelegramAllowedChatIds() {
+  const raw = process.env.TELEGRAM_ALLOWED_CHAT_IDS;
+  if (!raw) return [];
+
+  return raw
+    .split(",")
+    .map((value) => Number(value.trim()))
+    .filter((value) => Number.isInteger(value));
+}

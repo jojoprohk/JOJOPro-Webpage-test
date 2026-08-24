@@ -11,7 +11,7 @@ import {
 import type { VenueRepository } from "./venue-repository.js";
 
 export interface TelegramIntakeResult {
-  status: "saved" | "ignored";
+  status: "saved" | "ignored" | "forbidden";
   intakeItemId?: string;
   venueDraftId?: string;
   parseStatus?: ParseResult["status"];
@@ -24,6 +24,7 @@ interface ProcessTelegramIntakeDeps {
   parseVenue?: typeof parseVenuePost;
   completeJson: JsonCompleter;
   repository: VenueRepository;
+  allowedChatIds?: number[];
 }
 
 export async function processTelegramIntake({
@@ -32,6 +33,7 @@ export async function processTelegramIntake({
   parseVenue = parseVenuePost,
   completeJson,
   repository,
+  allowedChatIds = [],
 }: ProcessTelegramIntakeDeps): Promise<TelegramIntakeResult> {
   const parsedUpdate = parseTelegramUpdate(update);
 
@@ -39,6 +41,16 @@ export async function processTelegramIntake({
     return {
       status: "ignored",
       reason: parsedUpdate.reason,
+    };
+  }
+
+  if (
+    allowedChatIds.length > 0 &&
+    !allowedChatIds.includes(parsedUpdate.chatId)
+  ) {
+    return {
+      status: "forbidden",
+      reason: "Telegram chat 未獲授權。",
     };
   }
 

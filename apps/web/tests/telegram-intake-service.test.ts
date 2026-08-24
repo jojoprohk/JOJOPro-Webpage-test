@@ -102,4 +102,36 @@ describe("processTelegramIntake", () => {
 
     expect(result.status).toBe("ignored");
   });
+
+  it("does not parse or save updates from unauthorized chats", async () => {
+    const result = await processTelegramIntake({
+      update: {
+        update_id: 3,
+        message: {
+          message_id: 3,
+          date: 1787555400,
+          chat: { id: 999, type: "private" },
+          text: input.rawContent,
+        },
+      },
+      parseTelegramUpdate: () => ({
+        status: "received",
+        input,
+        messageId: 3,
+        chatId: 999,
+      }),
+      completeJson: async () => {
+        throw new Error("should not parse unauthorized updates");
+      },
+      allowedChatIds: [123],
+      repository: {
+        async saveIntakeAndDraft() {
+          throw new Error("should not save unauthorized updates");
+        },
+      },
+    });
+
+    expect(result.status).toBe("forbidden");
+    expect(result.reason).toContain("未獲授權");
+  });
 });
