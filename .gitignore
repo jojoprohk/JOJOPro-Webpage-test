@@ -14,6 +14,7 @@ node_modules/
 dist/
 coverage/
 .vercel/
+*.tsbuildinfo
 
 # 作業系統／編輯器
 .DS_Store
