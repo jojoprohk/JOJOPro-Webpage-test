@@ -3,7 +3,7 @@ import {
   assertTelegramWebhookSecret,
   getTelegramAllowedChatIds,
 } from "../../../../lib/env";
-import { createOpenAiVenueCompleter } from "../../../../lib/openai-venue-completer";
+import { createLlmVenueCompleter } from "../../../../lib/llm-venue-completer";
 import { processTelegramIntake } from "../../../../lib/telegram-intake-service";
 import type { TelegramUpdate } from "../../../../lib/telegram-parser";
 import {
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
   try {
     const update = (await request.json()) as TelegramUpdate;
     const repository = createVenueRepository(createSupabaseServiceClient());
-    const completeJson = createOpenAiVenueCompleter();
+    const completeJson = createLlmVenueCompleter();
 
     const result = await processTelegramIntake({
       update,

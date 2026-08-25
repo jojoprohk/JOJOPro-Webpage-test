@@ -99,8 +99,9 @@ Root `package.json`:
 `.env.example`:
 
 ```env
-OPENAI_API_KEY=
-OPENAI_MODEL=gpt-4o-mini
+LLM_API_KEY=
+LLM_BASE_URL=https://api.groq.com/openai/v1
+LLM_MODEL=llama-3.3-70b-versatile
 SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
 TELEGRAM_BOT_TOKEN=
@@ -267,4 +268,4 @@ Deferred to later plans:
 - Review UI.
 - Social draft generation.
 - Image handling.
-- OpenAI live client integration.
+- OpenAI-compatible LLM live client integration.

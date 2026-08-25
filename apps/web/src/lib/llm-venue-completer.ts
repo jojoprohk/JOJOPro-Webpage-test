@@ -93,14 +93,20 @@ function isParseResultPayload(
   );
 }
 
-export function createOpenAiVenueCompleter(): JsonCompleter {
-  const apiKey = process.env.OPENAI_API_KEY;
+export function createLlmVenueCompleter(): JsonCompleter {
+  const apiKey = process.env.LLM_API_KEY;
   if (!apiKey) {
-    throw new Error("Missing OPENAI_API_KEY.");
+    throw new Error("Missing LLM_API_KEY.");
   }
 
-  const client = new OpenAI({ apiKey });
-  const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+  const baseURL =
+    process.env.LLM_BASE_URL || "https://api.groq.com/openai/v1";
+  const model = process.env.LLM_MODEL || "llama-3.3-70b-versatile";
+
+  const client = new OpenAI({
+    apiKey,
+    baseURL,
+  });
 
   return async ({ messages }) => {
     const completion = await client.chat.completions.create({
@@ -112,18 +118,18 @@ export function createOpenAiVenueCompleter(): JsonCompleter {
 
     const content = completion.choices[0]?.message.content;
     if (!content) {
-      throw new Error("AI response did not include content.");
+      throw new Error("LLM response did not include content.");
     }
 
     let parsed: unknown;
     try {
       parsed = JSON.parse(content);
     } catch {
-      throw new Error("AI response was not valid JSON.");
+      throw new Error("LLM response was not valid JSON.");
     }
 
     if (!isParseResultPayload(parsed)) {
-      throw new Error("AI response did not match the expected schema.");
+      throw new Error("LLM response did not match the expected schema.");
     }
 
     return {

@@ -65,7 +65,7 @@ packages/
 2. Telegram parser 只處理 message text 同 image caption。
 3. Webhook 必須用 `X-Telegram-Bot-Api-Secret-Token` 驗證。
 4. Supabase 使用 service role key，只可以喺 server 讀取。
-5. OpenAI completer 用 structured JSON output，輸出型別必須對齊 `ParseResult`。
+5. OpenAI-compatible LLM completer 用 structured JSON output，初期可用 Groq，輸出型別必須對齊 `ParseResult`。
 6. 非場地貼文都要寫入 `intake_items`，同時建立 `status = rejected` 嘅 `venue_drafts`，方便日後檢查。
 7. 冇文字內容、冇 caption、system message 一律回傳 ignored，但唔寫入資料庫。
 8. 所有錯誤訊息唔可以打印 token、API key、Supabase key 或完整 Telegram update。

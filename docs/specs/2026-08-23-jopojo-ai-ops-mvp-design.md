@@ -51,7 +51,7 @@ Mercy 想建立一個 AI 輔助工作流程，減少人手整理時間，同時�
 | 收料入口 | Telegram Bot | 免費、穩定、易接自動化，支援文字、圖片、連結 |
 | 網頁應用 | Next.js + TypeScript | 同時做公開網站、審核後台同 bot webhook |
 | 資料庫 | Supabase PostgreSQL | 免費額度可用，結構化資料，日後可加 auth |
-| AI | OpenAI structured output | 平衡成本、解析能力同穩定性 |
+| AI | OpenAI-compatible structured output，初期用 Groq | 平衡成本、免費額度、解析能力同可轉換供應商 |
 | 部署 | Vercel | Next.js 部署簡單，webhook 處理方便 |
 | 社交發布 | 初期人手發布，後期接 Meta API | 等資料質素穩定先自動，減少出錯風險 |
 
