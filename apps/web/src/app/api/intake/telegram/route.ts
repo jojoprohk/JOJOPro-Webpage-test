@@ -39,7 +39,8 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({ ok: true, result });
-  } catch {
+  } catch (error) {
+    console.error("[telegram-intake] processing failed:", error);
     return NextResponse.json(
       { ok: false, error: "intake_processing_failed" },
       { status: 500 },

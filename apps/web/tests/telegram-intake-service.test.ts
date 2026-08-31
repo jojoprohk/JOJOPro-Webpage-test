@@ -10,91 +10,115 @@ const input: IntakeInput = {
   receivedAt: "2026-08-24T10:00:00.000Z",
 };
 
-const parseResult: ParseResult = {
-  status: "needs_review",
-  draft: {
-    title: "大埔廣場4粒",
-    district: "大埔",
-    venueName: "大埔廣場",
-    startDate: "2026-08-25",
-    endDate: "2026-08-25",
-    priceText: "$900/日",
-    priceAmountHkd: 900,
-    priceUnit: "day",
-    boothSizeText: "4粒",
-    contactText: "WhatsApp 91234567",
-    contactWhatsappLink: "https://wa.me/85291234567",
-    areaType: "mall",
-    hasAircon: null,
-    isPrimeSpot: false,
-    isCartSpot: false,
-    allowsFood: null,
-    allowsDryGoods: null,
-    allowsBeauty: null,
-    allowsService: null,
-    requiresProductApproval: false,
-    isUrgent: false,
-    isDiscounted: false,
-    summary: "大埔廣場4粒，$900/日。",
-  },
-  confidenceScore: 82,
-  lowConfidenceFields: [],
-  unconfirmedFields: [],
-  reviewNote: "測試 parse result。",
-};
+function singleResult(): ParseResult {
+  return {
+    status: "needs_review",
+    allAgentListings: false,
+    reviewNote: "",
+    entries: [
+      {
+        draft: {
+          title: "大埔廣場4粒",
+          district: "大埔",
+          venueName: "大埔廣場",
+          sessionDates: [],
+          startDate: "2026-08-25",
+          endDate: "2026-08-25",
+          priceText: "$900/日",
+          priceAmountHkd: 900,
+          priceUnit: "day",
+          boothSizeText: "4粒",
+          contactText: "WhatsApp 91234567",
+          contactWhatsappLink: "https://wa.me/85291234567",
+          areaType: "mall",
+          hasAircon: null,
+          isPrimeSpot: false,
+          isCartSpot: false,
+          allowsFood: null,
+          allowsDryGoods: null,
+          allowsBeauty: null,
+          allowsService: null,
+          requiresProductApproval: false,
+          isUrgent: false,
+          isDiscounted: false,
+          summary: "大埔廣場4粒，$900/日。",
+        },
+        confidenceScore: 82,
+        lowConfidenceFields: [],
+        unconfirmedFields: [],
+        reviewNote: "測試 parse result。",
+        isAgentListing: false,
+      },
+    ],
+  };
+}
+
+function receivedUpdate(chatId = 1) {
+  return {
+    update_id: 1,
+    message: {
+      message_id: 1,
+      date: 1787555400,
+      chat: { id: chatId, type: "private" as const },
+      text: input.rawContent,
+    },
+  };
+}
 
 describe("processTelegramIntake", () => {
   it("saves parsed venue drafts", async () => {
-    const saved: Array<{ input: IntakeInput; result: ParseResult }> = [];
+    const draftsSaved: number[] = [];
 
     const result = await processTelegramIntake({
-      update: {
-        update_id: 1,
-        message: {
-          message_id: 1,
-          date: 1787555400,
-          chat: { id: 1, type: "private" },
-          text: input.rawContent,
-        },
-      },
+      update: receivedUpdate(),
       parseTelegramUpdate: () => ({
-        status: "received",
+        status: "received" as const,
         input,
         messageId: 1,
         chatId: 1,
       }),
-      completeJson: async () => {
-        const { status: _status, ...rest } = parseResult;
-        return rest;
-      },
+      completeJson: async () => ({
+        isVenuePost: true,
+        entries: [
+          {
+            ...singleResult().entries[0]!,
+          },
+        ],
+      }),
       repository: {
-        async saveIntakeAndDraft(receivedInput, receivedResult) {
-          saved.push({ input: receivedInput, result: receivedResult });
+        async saveIntakeAndDrafts(_input, parseResult) {
+          draftsSaved.push(parseResult.entries.length);
           return {
             intakeItemId: "intake-1",
-            venueDraftId: "draft-1",
+            venueDraftIds: ["draft-1"],
           };
+        },
+        async saveIntakeOnly() {
+          throw new Error("should not save intake-only for normal post");
         },
       },
     });
 
     expect(result.status).toBe("saved");
-    expect(saved).toHaveLength(1);
-    expect(saved[0]?.result.draft.venueName).toBe("大埔廣場");
+    expect(result.venueCount).toBe(1);
+    expect(draftsSaved).toEqual([1]);
   });
 
   it("does not save ignored updates", async () => {
     const result = await processTelegramIntake({
       update: { update_id: 2 },
       parseTelegramUpdate: () => ({
-        status: "ignored",
+        status: "ignored" as const,
         reason: "冇文字內容。",
       }),
       completeJson: async () => {
         throw new Error("should not parse ignored updates");
       },
       repository: {
-        async saveIntakeAndDraft() {
+        async saveIntakeAndDrafts() {
+          throw new Error("should not save ignored updates");
+        },
+        async saveIntakeOnly() {
           throw new Error("should not save ignored updates");
         },
       },
@@ -105,17 +129,9 @@ describe("processTelegramIntake", () => {
 
   it("does not parse or save updates from unauthorized chats", async () => {
     const result = await processTelegramIntake({
-      update: {
-        update_id: 3,
-        message: {
-          message_id: 3,
-          date: 1787555400,
-          chat: { id: 999, type: "private" },
-          text: input.rawContent,
-        },
-      },
+      update: receivedUpdate(999),
       parseTelegramUpdate: () => ({
-        status: "received",
+        status: "received" as const,
         input,
         messageId: 3,
         chatId: 999,
@@ -125,7 +141,10 @@ describe("processTelegramIntake", () => {
       },
       allowedChatIds: [123],
       repository: {
-        async saveIntakeAndDraft() {
+        async saveIntakeAndDrafts() {
+          throw new Error("should not save unauthorized updates");
+        },
+        async saveIntakeOnly() {
           throw new Error("should not save unauthorized updates");
         },
       },
@@ -133,5 +152,42 @@ describe("processTelegramIntake", () => {
 
     expect(result.status).toBe("forbidden");
     expect(result.reason).toContain("未獲授權");
+  });
+
+  it("saves intake-only (no drafts) when all venues are agent listings", async () => {
+    let intakeOnlyCalled = false;
+
+    const result = await processTelegramIntake({
+      update: receivedUpdate(),
+      parseTelegramUpdate: () => ({
+        status: "received" as const,
+        input,
+        messageId: 1,
+        chatId: 1,
+      }),
+      completeJson: async () => ({
+        isVenuePost: true,
+        entries: [
+          {
+            ...singleResult().entries[0]!,
+            reviewNote: "⚠️ 代放/代理資訊，非業主直接發布。",
+            isAgentListing: true,
+          },
+        ],
+      }),
+      repository: {
+        async saveIntakeAndDrafts() {
+          throw new Error("should not draft all-agent posts");
+        },
+        async saveIntakeOnly() {
+          intakeOnlyCalled = true;
+          return { intakeItemId: "intake-9" };
+        },
+      },
+    });
+
+    expect(result.status).toBe("skipped");
+    expect(result.reason).toContain("代放");
+    expect(intakeOnlyCalled).toBe(true);
   });
 });

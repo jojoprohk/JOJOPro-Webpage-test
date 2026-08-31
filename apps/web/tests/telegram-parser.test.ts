@@ -81,7 +81,7 @@ describe("parseTelegramVenueUpdate", () => {
     expect(result.input.rawContent).toContain("沙田新場");
   });
 
-  it("ignores messages without text or caption", () => {
+  it("accepts a caption-less photo (vision OCR decides) and ignores empty messages", () => {
     const result = parseTelegramVenueUpdate({
       update_id: 3,
       message: {
@@ -102,9 +102,20 @@ describe("parseTelegramVenueUpdate", () => {
       },
     });
 
-    expect(result.status).toBe("ignored");
-    if (result.status === "ignored") {
-      expect(result.reason).toContain("文字");
+    expect(result.status).toBe("received");
+    if (result.status === "received") {
+      expect(result.input.rawContent).toBe("[圖片]");
+      expect(result.input.photoFileIds).toEqual(["file-id"]);
     }
+
+    const empty = parseTelegramVenueUpdate({
+      update_id: 4,
+      message: {
+        message_id: 103,
+        date: 1787555530,
+        chat: { id: 603, type: "private" },
+      },
+    });
+    expect(empty.status).toBe("ignored");
   });
 });

@@ -1,10 +1,12 @@
 import OpenAI from "openai";
 import type {
   AreaType,
+  ImageInput,
   JsonCompleter,
-  ParseResult,
+  MultiVenueResult,
   PriceUnit,
   VenueDraft,
+  VenueDraftEntry,
   VenueDraftField,
 } from "@jopojo/ai";
 
@@ -45,6 +47,43 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
+// LLM 可能回傳唔屬於 VenueDraft 欄位名嘅字串，過濾成合法欄位 key。
+const draftFieldNames = [
+  "title",
+  "district",
+  "venueName",
+  "sessionDates",
+  "startDate",
+  "endDate",
+  "priceText",
+  "priceAmountHkd",
+  "priceUnit",
+  "boothSizeText",
+  "contactText",
+  "contactWhatsappLink",
+  "areaType",
+  "hasAircon",
+  "isPrimeSpot",
+  "isCartSpot",
+  "allowsFood",
+  "allowsDryGoods",
+  "allowsBeauty",
+  "allowsService",
+  "requiresProductApproval",
+  "isUrgent",
+  "isDiscounted",
+  "summary",
+] as const satisfies readonly VenueDraftField[];
+
+const draftFieldSet = new Set<string>(draftFieldNames);
+
+function coerceFieldList(value: unknown): VenueDraftField[] {
+  if (!isStringArray(value)) return [];
+  return value.filter((field): field is VenueDraftField =>
+    draftFieldSet.has(field),
+  );
+}
+
 function isVenueDraft(value: unknown): value is VenueDraft {
   if (!isObject(value)) return false;
 
@@ -52,6 +91,7 @@ function isVenueDraft(value: unknown): value is VenueDraft {
     typeof value.title === "string" &&
     isOptionalString(value.district) &&
     isOptionalString(value.venueName) &&
+    isStringArray(value.sessionDates) &&
     isOptionalString(value.startDate) &&
     isOptionalString(value.endDate) &&
     isOptionalString(value.priceText) &&
@@ -77,20 +117,119 @@ function isVenueDraft(value: unknown): value is VenueDraft {
   );
 }
 
-function isParseResultPayload(
-  value: unknown,
-): value is Omit<ParseResult, "status"> {
+function isVenueDraftEntry(value: unknown): value is VenueDraftEntry {
   if (!isObject(value)) return false;
 
   return (
-    isVenueDraft(value.draft) &&
+    isVenueDraft(normalizeDraft(value.draft)) &&
     typeof value.confidenceScore === "number" &&
     value.confidenceScore >= 0 &&
     value.confidenceScore <= 100 &&
     isStringArray(value.lowConfidenceFields) &&
     isStringArray(value.unconfirmedFields) &&
-    typeof value.reviewNote === "string"
+    typeof value.reviewNote === "string" &&
+    (value.isAgentListing === undefined ||
+      typeof value.isAgentListing === "boolean")
   );
+}
+
+function isMultiVenuePayload(value: unknown): value is MultiVenueResult {
+  if (!isObject(value)) return false;
+  if (typeof value.isVenuePost !== "boolean") return false;
+  if (!Array.isArray(value.entries)) return false;
+  return value.entries.every((entry) => isVenueDraftEntry(entry));
+}
+
+// 向後相容：舊版模型可能仲係回傳單一草稿頂層 { draft, ... }。
+function coerceLegacyPayload(value: unknown): MultiVenueResult | null {
+  if (
+    isObject(value) &&
+    !Array.isArray((value as { entries?: unknown }).entries) &&
+    isVenueDraft(normalizeDraft((value as { draft?: unknown }).draft))
+  ) {
+    const v = value as {
+      draft: unknown;
+      confidenceScore?: unknown;
+      lowConfidenceFields?: unknown;
+      unconfirmedFields?: unknown;
+      reviewNote?: unknown;
+    };
+    return {
+      isVenuePost: true,
+      entries: [
+        {
+          draft: normalizeDraft(v.draft) as VenueDraft,
+          confidenceScore:
+            typeof v.confidenceScore === "number" ? v.confidenceScore : 60,
+          lowConfidenceFields: coerceFieldList(v.lowConfidenceFields),
+          unconfirmedFields: coerceFieldList(v.unconfirmedFields),
+          reviewNote:
+            typeof v.reviewNote === "string" ? v.reviewNote : "",
+        },
+      ],
+    };
+  }
+  return null;
+}
+
+// LLMs often omit fields they consider "default" (false / null / unknown).
+// Fill safe defaults so a sparse-but-valid response is still accepted.
+function normalizeDraft(value: unknown): VenueDraft | null {
+  if (!isObject(value) || typeof value.title !== "string") return null;
+
+  return {
+    title: value.title,
+    district: isOptionalString(value.district) ? value.district : null,
+    venueName: isOptionalString(value.venueName) ? value.venueName : null,
+    sessionDates: isStringArray(value.sessionDates) ? value.sessionDates : [],
+    startDate: isOptionalString(value.startDate) ? value.startDate : null,
+    endDate: isOptionalString(value.endDate) ? value.endDate : null,
+    priceText: isOptionalString(value.priceText) ? value.priceText : null,
+    priceAmountHkd: isOptionalNumber(value.priceAmountHkd)
+      ? value.priceAmountHkd
+      : null,
+    priceUnit: (() => {
+      const raw = String(value.priceUnit ?? "").toLowerCase();
+      if (raw === "daily" || raw === "per_day" || raw === "day") return "day";
+      if (raw === "period" || raw === "whole_period") return "period";
+      return priceUnits.includes(raw as PriceUnit)
+        ? (raw as PriceUnit)
+        : "unknown";
+    })(),
+    boothSizeText: isOptionalString(value.boothSizeText)
+      ? value.boothSizeText
+      : null,
+    contactText: isOptionalString(value.contactText)
+      ? value.contactText
+      : null,
+    contactWhatsappLink: isOptionalString(value.contactWhatsappLink)
+      ? value.contactWhatsappLink
+      : null,
+    areaType: areaTypes.includes(value.areaType as AreaType)
+      ? (value.areaType as AreaType)
+      : "unknown",
+    hasAircon: isOptionalBoolean(value.hasAircon) ? value.hasAircon : null,
+    isPrimeSpot: isBoolean(value.isPrimeSpot) ? value.isPrimeSpot : false,
+    isCartSpot: isBoolean(value.isCartSpot) ? value.isCartSpot : false,
+    allowsFood: isOptionalBoolean(value.allowsFood) ? value.allowsFood : null,
+    allowsDryGoods: isOptionalBoolean(value.allowsDryGoods)
+      ? value.allowsDryGoods
+      : null,
+    allowsBeauty: isOptionalBoolean(value.allowsBeauty)
+      ? value.allowsBeauty
+      : null,
+    allowsService: isOptionalBoolean(value.allowsService)
+      ? value.allowsService
+      : null,
+    requiresProductApproval: isBoolean(value.requiresProductApproval)
+      ? value.requiresProductApproval
+      : false,
+    isUrgent: isBoolean(value.isUrgent) ? value.isUrgent : false,
+    isDiscounted: isBoolean(value.isDiscounted)
+      ? value.isDiscounted
+      : false,
+    summary: typeof value.summary === "string" ? value.summary : "",
+  };
 }
 
 export function createLlmVenueCompleter(): JsonCompleter {
@@ -108,10 +247,64 @@ export function createLlmVenueCompleter(): JsonCompleter {
     baseURL,
   });
 
-  return async ({ messages }) => {
+  return async ({ messages, images = [] }) => {
+    // Build vision-ready payload: the final user message gets image parts
+    // attached so the model can OCR venue details from Telegram photos.
+    const resolvedMessages: OpenAI.Chat.ChatCompletionMessageParam[] =
+      images.length === 0
+        ? (messages as OpenAI.Chat.ChatCompletionMessageParam[])
+        : (() => {
+            const textParts = messages.map((m) => {
+              if (m.role === "user" && typeof m.content === "string") {
+                return m;
+              }
+              return m as OpenAI.Chat.ChatCompletionMessageParam;
+            });
+
+            const lastUserIndex = [...textParts]
+              .map((m, i) => (m.role === "user" ? i : -1))
+              .filter((i) => i >= 0)
+              .pop();
+
+            const imageContent = [
+              ...images.map(
+                (img): OpenAI.Chat.ChatCompletionContentPart => ({
+                  type: "image_url",
+                  image_url: {
+                    url: `data:${img.mimeType};base64,${img.base64}`,
+                  },
+                }),
+              ),
+            ];
+
+            if (lastUserIndex === undefined) {
+              return [
+                {
+                  role: "user",
+                  content: [
+                    ...imageContent,
+                    { type: "text", text: "請根據以上圖片抽取場地資料。" },
+                  ],
+                } as OpenAI.Chat.ChatCompletionMessageParam,
+                ...textParts,
+              ];
+            }
+
+            return textParts.map((m, i) => {
+              if (i !== lastUserIndex) return m;
+              return {
+                role: "user",
+                content: [
+                  ...imageContent,
+                  { type: "text", text: (m as { content?: string }).content ?? "" },
+                ],
+              } as OpenAI.Chat.ChatCompletionMessageParam;
+            });
+          })();
+
     const completion = await client.chat.completions.create({
       model,
-      messages,
+      messages: resolvedMessages,
       temperature: 0,
       response_format: { type: "json_object" },
     });
@@ -128,16 +321,30 @@ export function createLlmVenueCompleter(): JsonCompleter {
       throw new Error("LLM response was not valid JSON.");
     }
 
-    if (!isParseResultPayload(parsed)) {
+    if (process.env.DEBUG_LLM === "1") {
+      console.error("[debug] raw LLM content:", content);
+    }
+
+    const payload =
+      isMultiVenuePayload(parsed)
+        ? parsed
+        : coerceLegacyPayload(parsed);
+
+    if (!payload) {
       throw new Error("LLM response did not match the expected schema.");
     }
 
     return {
-      draft: parsed.draft,
-      confidenceScore: Math.round(parsed.confidenceScore),
-      lowConfidenceFields: parsed.lowConfidenceFields as VenueDraftField[],
-      unconfirmedFields: parsed.unconfirmedFields as VenueDraftField[],
-      reviewNote: parsed.reviewNote,
+      isVenuePost: payload.isVenuePost,
+      note: typeof payload.note === "string" ? payload.note : undefined,
+      entries: payload.entries.map((entry) => ({
+        draft: normalizeDraft(entry.draft) as VenueDraft,
+        confidenceScore: Math.round(entry.confidenceScore),
+        lowConfidenceFields: coerceFieldList(entry.lowConfidenceFields),
+        unconfirmedFields: coerceFieldList(entry.unconfirmedFields),
+        reviewNote: entry.reviewNote,
+        isAgentListing: entry.isAgentListing === true,
+      })),
     };
   };
 }

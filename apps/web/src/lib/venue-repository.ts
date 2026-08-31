@@ -1,100 +1,108 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { IntakeInput, ParseResult } from "@jopojo/ai";
+import type { IntakeInput, ParseResult, VenueDraftEntry } from "@jopojo/ai";
 
-interface SaveIntakeAndDraftResult {
+interface SaveIntakeAndDraftsResult {
   intakeItemId: string;
-  venueDraftId: string;
+  venueDraftIds: string[];
 }
 
 export interface VenueRepository {
-  saveIntakeAndDraft(
+  // 一條原始訊息可以對應多筆場地草稿（拆場地）。
+  saveIntakeAndDrafts(
     input: IntakeInput,
     result: ParseResult,
-  ): Promise<SaveIntakeAndDraftResult>;
+  ): Promise<SaveIntakeAndDraftsResult>;
+  // 只記低原始貼文（例如全部屬代放/非場地被跳過時），唔產生草稿。
+  saveIntakeOnly(input: IntakeInput): Promise<{ intakeItemId: string }>;
 }
 
-interface MapVenueDraftToRowInput {
-  intakeItemId: string;
-  result: ParseResult;
-}
-
-export function mapVenueDraftToRow({
-  intakeItemId,
-  result,
-}: MapVenueDraftToRowInput) {
+function mapVenueDraftToRow(
+  intakeItemId: string,
+  entry: VenueDraftEntry,
+) {
+  const d = entry.draft;
   return {
     intake_item_id: intakeItemId,
-    status: result.status,
-    title: result.draft.title,
-    district: result.draft.district,
-    venue_name: result.draft.venueName,
-    start_date: result.draft.startDate,
-    end_date: result.draft.endDate,
-    price_text: result.draft.priceText,
-    price_amount_hkd: result.draft.priceAmountHkd,
-    price_unit: result.draft.priceUnit,
-    booth_size_text: result.draft.boothSizeText,
-    contact_text: result.draft.contactText,
-    contact_whatsapp_link: result.draft.contactWhatsappLink,
-    area_type: result.draft.areaType,
-    has_aircon: result.draft.hasAircon,
-    is_prime_spot: result.draft.isPrimeSpot,
-    is_cart_spot: result.draft.isCartSpot,
-    allows_food: result.draft.allowsFood,
-    allows_dry_goods: result.draft.allowsDryGoods,
-    allows_beauty: result.draft.allowsBeauty,
-    allows_service: result.draft.allowsService,
-    requires_product_approval: result.draft.requiresProductApproval,
-    is_urgent: result.draft.isUrgent,
-    is_discounted: result.draft.isDiscounted,
-    summary: result.draft.summary,
-    confidence_score: result.confidenceScore,
-    low_confidence_fields: result.lowConfidenceFields,
-    unconfirmed_fields: result.unconfirmedFields,
-    review_note: result.reviewNote,
+    status: "needs_review" as const,
+    title: d.title,
+    district: d.district,
+    venue_name: d.venueName,
+    session_dates: d.sessionDates,
+    start_date: d.startDate,
+    end_date: d.endDate,
+    price_text: d.priceText,
+    price_amount_hkd: d.priceAmountHkd,
+    price_unit: d.priceUnit,
+    booth_size_text: d.boothSizeText,
+    contact_text: d.contactText,
+    contact_whatsapp_link: d.contactWhatsappLink,
+    area_type: d.areaType,
+    has_aircon: d.hasAircon,
+    is_prime_spot: d.isPrimeSpot,
+    is_cart_spot: d.isCartSpot,
+    allows_food: d.allowsFood,
+    allows_dry_goods: d.allowsDryGoods,
+    allows_beauty: d.allowsBeauty,
+    allows_service: d.allowsService,
+    requires_product_approval: d.requiresProductApproval,
+    is_urgent: d.isUrgent,
+    is_discounted: d.isDiscounted,
+    summary: d.summary,
+    confidence_score: entry.confidenceScore,
+    low_confidence_fields: entry.lowConfidenceFields,
+    unconfirmed_fields: entry.unconfirmedFields,
+    review_note: entry.reviewNote,
   };
 }
 
 export function createVenueRepository(
   supabase: SupabaseClient,
 ): VenueRepository {
-  return {
-    async saveIntakeAndDraft(input, result) {
-      const { data: intakeData, error: intakeError } = await supabase
-        .from("intake_items")
-        .insert({
-          source_type: input.sourceType,
-          source_label: input.sourceLabel,
-          source_url: input.sourceUrl,
-          raw_content: input.rawContent,
-          received_at: input.receivedAt,
-        })
-        .select("id")
-        .single<{ id: string }>();
+  async function insertIntake(input: IntakeInput) {
+    const { data: intakeData, error: intakeError } = await supabase
+      .from("intake_items")
+      .insert({
+        source_type: input.sourceType,
+        source_label: input.sourceLabel,
+        source_url: input.sourceUrl,
+        raw_content: input.rawContent,
+        received_at: input.receivedAt,
+        photo_file_ids: input.photoFileIds ?? [],
+      })
+      .select("id")
+      .single<{ id: string }>();
 
-      if (intakeError || !intakeData) {
-        throw new Error(intakeError?.message ?? "Failed to save intake item.");
-      }
+    if (intakeError || !intakeData) {
+      throw new Error(intakeError?.message ?? "Failed to save intake item.");
+    }
+
+    return intakeData;
+  }
+
+  return {
+    async saveIntakeAndDrafts(input, result) {
+      const intakeData = await insertIntake(input);
+      const rows = result.entries.map((entry) =>
+        mapVenueDraftToRow(intakeData.id, entry),
+      );
 
       const { data: draftData, error: draftError } = await supabase
         .from("venue_drafts")
-        .insert(
-          mapVenueDraftToRow({
-            intakeItemId: intakeData.id,
-            result,
-          }),
-        )
-        .select("id")
-        .single<{ id: string }>();
+        .insert(rows)
+        .select("id");
 
       if (draftError || !draftData) {
-        throw new Error(draftError?.message ?? "Failed to save venue draft.");
+        throw new Error(draftError?.message ?? "Failed to save venue drafts.");
       }
 
       return {
         intakeItemId: intakeData.id,
-        venueDraftId: draftData.id,
+        venueDraftIds: draftData.map((row) => row.id),
       };
+    },
+    async saveIntakeOnly(input) {
+      const intakeData = await insertIntake(input);
+      return { intakeItemId: intakeData.id };
     },
   };
 }

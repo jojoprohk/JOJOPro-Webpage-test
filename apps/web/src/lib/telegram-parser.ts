@@ -162,10 +162,21 @@ export function parseTelegramVenueUpdate(
     return { status: "ignored", reason: "冇 Telegram message。" };
   }
 
-  const rawContent = (message.text ?? message.caption ?? "").trim();
-  if (!rawContent) {
-    return { status: "ignored", reason: "訊息冇文字或 caption。" };
+  const textContent = (message.text ?? message.caption ?? "").trim();
+  const photos = message.photo ?? [];
+  const hasPhoto = photos.length > 0;
+
+  // Pick the largest available photo size (Telegram sends ascending sizes).
+  const largestPhoto = hasPhoto ? photos[photos.length - 1] : undefined;
+  const photoFileIds = largestPhoto ? [largestPhoto.file_id] : [];
+
+  // A photo with no caption is still processable via vision OCR.
+  // A message with neither text nor photo has nothing to parse.
+  if (!textContent && !hasPhoto) {
+    return { status: "ignored", reason: "訊息冇文字、caption 或圖片。" };
   }
+
+  const rawContent = textContent || "[圖片]";
 
   return {
     status: "received",
@@ -177,6 +188,7 @@ export function parseTelegramVenueUpdate(
       sourceLabel: getSourceLabel(message),
       sourceUrl: extractSourceUrl(message, rawContent) ?? undefined,
       receivedAt: new Date(message.date * 1000).toISOString(),
+      photoFileIds,
     },
   };
 }
