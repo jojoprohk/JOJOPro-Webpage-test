@@ -1,7 +1,7 @@
 # JoPoJo 開發進度（單一交接文件）
 
 最後更新：2026-09-01
-狀態：Stage 1 情報營運服務 — 後端收料 pipeline 已成型，審核／公開頁未做
+狀態：Stage 1 — 收料 pipeline 同審核頁（slice 3）已完成；公開 listing 頁未做
 
 > 呢份文件係任何新對話／新 agent 接手時**第一份要讀**嘅檔。
 > 配套規格：`docs/specs/2026-08-23-jopojo-ai-ops-mvp-design.md`、結構規範 `docs/PROJECT_STRUCTURE.md`、長遠方向 `docs/vision/long-term-vision.md`。
@@ -23,7 +23,7 @@ npm run typecheck
 node server/build.mjs
 ```
 
-測試目前：24 個全綠（packages/ai 15、apps/web 9）。
+測試目前：36 個全綠（packages/ai 15、apps/web 21）。
 
 注意：本地 sandbox 若唔畀寫 `node_modules/.vite` 或 `*.tsbuildinfo`，
 用 `vitest run --no-cache` 同 `tsc --noEmit --incremental false` 即可，唔影響結果。
@@ -52,16 +52,34 @@ node server/build.mjs
    - **批次合併**：90 秒安靜窗口內嘅相＋文合成一個 intake 先解析
    - 解析後直接 Telegram 回覆列表，等 Mercy 快速核對
    - OpenAI-compatible LLM（可 Groq 可其他 provider）
+5. **審核 queue 頁（slice 3）** — `/review`
+   - 單一密碼登入（`REVIEW_SECRET`）+ httpOnly 簽名 cookie（`review-auth.ts`）
+   - 列出 `needs_review` 草稿，低信心欄位黃色高亮，可改欄位後批准／拒絕
+   - API：`/api/review/session`、`/api/review/drafts`、`/api/review/drafts/[id]`
+   - 寫入全部經 server service role，欄位白名單防任意寫入；開咗 RLS 防呆
+   - **要 Mercy 做兩步先用到**（見第 6 節）
 
 ---
 
 ## 3. 未做（下一步，按順序）
 
-4. **最小審核 queue 頁** — Mercy 批准／修改／拒絕 `needs_review` 草稿；低信心欄位要標示。
-   仲要加 Supabase RLS 同審核者身份（而家 schema 刻意未開 RLS）。
-5. **公開 listing 頁** — 搜尋＋篩選（日期／預算／尺寸／食品／冷氣／急放）、listing 卡、
+4. **公開 listing 頁（slice 4，下一步）** — 搜尋＋篩選（日期／預算／尺寸／食品／冷氣／急放）、listing 卡、
    WhatsApp 聯絡掣、「回報資料過期」。**唔做 marketing landing page，listing 頁就係產品。**
-6. **IG／FB 帖文草稿生成** — 7 種草稿類型（見 spec 第 10 節），初期人手貼，唔好做全自動發布。
+5. **IG／FB 帖文草稿生成（slice 5）** — 7 種草稿類型（見 spec 第 10 節），初期人手貼，唔好做全自動發布。
+
+---
+
+## 6. 審核頁啟用步驟（Mercy 一次性做）
+
+1. **跑兩條新 migration**：喺 Supabase SQL Editor 逐條 run
+   - `supabase/migrations/202609010001_drop_intake_unique.sql`（拆多場地唔再撞唯一約束）
+   - `supabase/migrations/202609010002_review_rls.sql`（開 RLS）
+2. **設密碼**：`openssl rand -hex 32` 產生一串，放入 `apps/web/.env.local`：
+   `REVIEW_SECRET=<你產生嘅密碼>`（呢串就係登入密碼，可另改易記嘅，但唔好入 git）。
+3. **開網站**：`apps/web` 跑 `npm run dev`，瀏覽器開 `http://localhost:3000/review`，
+   輸入密碼就見到待審核草稿。
+
+注意：審核頁暫時**唔會顯示相**（要另做一個用 bot token 代理相嘅 route），文字欄位齊全。
 
 圖片處理、IG 連結處理已基本有底（photo OCR 已做），可喺第 5 步一併打磨。
 
