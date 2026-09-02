@@ -1,7 +1,8 @@
 # JoPoJo 開發進度（單一交接文件）
 
-最後更新：2026-09-01
-狀態：Stage 1 — 收料 pipeline 同審核頁（slice 3）已完成；公開 listing 頁未做
+最後更新：2026-09-02
+狀態：Stage 1 — 收料 pipeline、審核頁（slice 3）同公開 listing 頁（slice 4）已完成；
+IG／FB 草稿生成（slice 5）未做
 
 > 呢份文件係任何新對話／新 agent 接手時**第一份要讀**嘅檔。
 > 配套規格：`docs/specs/2026-08-23-jopojo-ai-ops-mvp-design.md`、結構規範 `docs/PROJECT_STRUCTURE.md`、長遠方向 `docs/vision/long-term-vision.md`。
@@ -23,7 +24,7 @@ npm run typecheck
 node server/build.mjs
 ```
 
-測試目前：36 個全綠（packages/ai 15、apps/web 21）。
+測試目前：71 個全綠（packages/ai 15、apps/web 56）。
 
 注意：本地 sandbox 若唔畀寫 `node_modules/.vite` 或 `*.tsbuildinfo`，
 用 `vitest run --no-cache` 同 `tsc --noEmit --incremental false` 即可，唔影響結果。
@@ -34,10 +35,12 @@ node server/build.mjs
 
 ## 2. 已完成（對照 MVP spec 第 13 節實作順序）
 
-1. **項目結構 + 資料庫 schema** — npm workspaces monorepo；`supabase/migrations/` 3 條：
+1. **項目結構 + 資料庫 schema** — npm workspaces monorepo；`supabase/migrations/`：
    - `202608230001_create_intake_tables.sql`（intake_items + venue_drafts）
    - `202608270001_add_intake_photos.sql`（photo_file_ids）
    - `202608270002_add_session_dates.sql`（斷續檔期 session_dates）
+   - `202609010001_drop_intake_unique.sql`、`202609010002_review_rls.sql`（slice 3）
+   - `202609020001_add_report_count.sql`（slice 4：回報計數＋`increment_report_count` RPC）
 2. **Telegram 收料 webhook** — `apps/web/src/app/api/intake/telegram/route.ts`
    - secret-token header 驗證、chat 白名單（`TELEGRAM_ALLOWED_CHAT_IDS`）
    - 文字 + caption + 圖片；無內容訊息 ignored 唔入庫
@@ -58,22 +61,34 @@ node server/build.mjs
    - API：`/api/review/session`、`/api/review/drafts`、`/api/review/drafts/[id]`
    - 寫入全部經 server service role，欄位白名單防任意寫入；開咗 RLS 防呆
    - **要 Mercy 做兩步先用到**（見第 6 節）
+6. **公開 listing 頁（slice 4）** — `/`
+   - 審核頁一批准（`status = approved`）即公開，唔使二次發布
+   - 搜尋（地區／場地／關鍵字）＋篩選：邊日有檔、最高預算、可賣食品、冷氣、急放／特價
+   - **過期場地預設隱藏**（連續檔睇 `end_date`、斷續檔睇 `session_dates`，香港時區今日為準）
+   - listing 卡：日期、地區、場地、價錢原文、尺寸（註明「實際尺寸請向負責人確認」）、
+     限制 badges、來源、最後更新時間；WhatsApp／聯絡掣
+   - 「回報資料過期」：`POST /api/listings/[id]/report`，原子遞增 `report_count`
+     （SQL RPC `increment_report_count`），唔自動下架；client localStorage 防重複點
+   - 公開 DTO 走白名單，**唔回傳** raw_content／信心分數／低信心欄位／review_note
+   - server component 直接用 service role 讀庫，篩選用原生 GET form（無 JS 都用到）
+   - 純函數 `lib/listing-filter.ts`：篩選／排序／日期判定／WhatsApp link 正規化
 
 ---
 
 ## 3. 未做（下一步，按順序）
 
-4. **公開 listing 頁（slice 4，下一步）** — 搜尋＋篩選（日期／預算／尺寸／食品／冷氣／急放）、listing 卡、
-   WhatsApp 聯絡掣、「回報資料過期」。**唔做 marketing landing page，listing 頁就係產品。**
-5. **IG／FB 帖文草稿生成（slice 5）** — 7 種草稿類型（見 spec 第 10 節），初期人手貼，唔好做全自動發布。
+7. **IG／FB 帖文草稿生成（slice 5，下一步）** — 7 種草稿類型（見 spec 第 10 節），
+   初期人手貼，唔好做全自動發布。
+8. 圖片處理打磨、Instagram 連結處理（photo OCR 已做底；公開頁暫唔顯示相）。
 
 ---
 
-## 6. 審核頁啟用步驟（Mercy 一次性做）
+## 6. 啟用步驟（Mercy 一次性做）
 
-1. **跑兩條新 migration**：喺 Supabase SQL Editor 逐條 run
+1. **跑 migration**：喺 Supabase SQL Editor 逐條 run
    - `supabase/migrations/202609010001_drop_intake_unique.sql`（拆多場地唔再撞唯一約束）
    - `supabase/migrations/202609010002_review_rls.sql`（開 RLS）
+   - `supabase/migrations/202609020001_add_report_count.sql`（slice 4 回報計數＋RPC）
 2. **設密碼**：`openssl rand -hex 32` 產生一串，放入 `apps/web/.env.local`：
    `REVIEW_SECRET=<你產生嘅密碼>`（呢串就係登入密碼，可另改易記嘅，但唔好入 git）。
 3. **開網站**：`apps/web` 跑 `npm run dev`，瀏覽器開 `http://localhost:3000/review`，
