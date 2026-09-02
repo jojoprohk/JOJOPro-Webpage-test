@@ -33,6 +33,7 @@ export interface PublicListing {
   sourceUrl: string | null;
   lastReviewedAt: string | null;
   reportCount: number;
+  photoCount: number;
   createdAt: string;
 }
 

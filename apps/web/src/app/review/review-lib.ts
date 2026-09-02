@@ -2,6 +2,7 @@
 
 export type Draft = {
   id: string;
+  intake_item_id: string | null;
   title: string;
   district: string | null;
   venue_name: string | null;
@@ -24,6 +25,7 @@ export type Draft = {
   low_confidence_fields: string[] | null;
   unconfirmed_fields: string[] | null;
   review_note: string;
+  last_reviewed_at: string | null;
   intake: {
     source_label: string;
     source_url: string | null;

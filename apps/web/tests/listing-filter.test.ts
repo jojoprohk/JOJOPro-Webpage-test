@@ -43,6 +43,7 @@ function makeListing(overrides: Partial<PublicListing> = {}): PublicListing {
     sourceUrl: null,
     lastReviewedAt: "2026-09-01T00:00:00.000Z",
     reportCount: 0,
+    photoCount: 0,
     createdAt: "2026-09-01T00:00:00.000Z",
     ...overrides,
   };

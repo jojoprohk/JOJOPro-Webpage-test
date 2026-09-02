@@ -89,6 +89,65 @@ export function ListingCard({ listing }: { listing: PublicListing }) {
         ) : null}
       </div>
 
+      {listing.photoCount > 0 ? (
+        <div>
+          <a
+            href={`/api/photos/listing/${listing.id}/0`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={`/api/photos/listing/${listing.id}/0`}
+              alt={listing.title}
+              loading="lazy"
+              style={{
+                width: "100%",
+                height: 180,
+                objectFit: "cover",
+                borderRadius: 6,
+                display: "block",
+                background: "#f0eeec",
+              }}
+            />
+          </a>
+          {listing.photoCount > 1 ? (
+            <div
+              style={{
+                display: "flex",
+                gap: 6,
+                marginTop: 6,
+                overflowX: "auto",
+              }}
+            >
+              {Array.from({ length: listing.photoCount }, (_, i) => (
+                <a
+                  key={i}
+                  href={`/api/photos/listing/${listing.id}/${i}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`/api/photos/listing/${listing.id}/${i}`}
+                    alt={`${listing.title} 相 ${i + 1}`}
+                    loading="lazy"
+                    style={{
+                      width: 64,
+                      height: 64,
+                      objectFit: "cover",
+                      borderRadius: 4,
+                      display: "block",
+                      border: "1px solid #e7e5e4",
+                    }}
+                  />
+                </a>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       <div style={{ fontSize: 14, color: "#44403c" }}>
         <div>
           📍 {[listing.district, listing.venueName]

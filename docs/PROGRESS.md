@@ -24,10 +24,14 @@ npm run typecheck
 node server/build.mjs
 ```
 
-測試目前：71 個全綠（packages/ai 15、apps/web 56）。
+測試目前：78 個全綠（packages/ai 15、apps/web 63）。
 
 注意：本地 sandbox 若唔畀寫 `node_modules/.vite` 或 `*.tsbuildinfo`，
 用 `vitest run --no-cache` 同 `tsc --noEmit --incremental false` 即可，唔影響結果。
+
+dev server 注意：Next.js 16 預設 Turbopack 同本專案 webpack alias 唔相容，
+`npm run dev` 已固定用 `next dev --webpack`。圖片代理同 Telegram 收料共用
+`TELEGRAM_BOT_TOKEN`；審核頁登入要 `REVIEW_SECRET`（`.env.local`，2026-09-02 已補設）。
 
 環境設定見 `docs/operations/telegram-intake-setup.md`。真實 key 只放 `.env.local`（已 gitignore），**唔可以入 git**。
 
@@ -72,14 +76,24 @@ node server/build.mjs
    - 公開 DTO 走白名單，**唔回傳** raw_content／信心分數／低信心欄位／review_note
    - server component 直接用 service role 讀庫，篩選用原生 GET form（無 JS 都用到）
    - 純函數 `lib/listing-filter.ts`：篩選／排序／日期判定／WhatsApp link 正規化
+7. **審核批量操作＋批准狀態＋圖片（slice 4.1）**
+   - 審核頁分「待審核／已批准」兩個分頁；批准後卡頂顯示綠色「已批准，已發布」、
+     拒絕顯示紅色，短暫顯示後移除；「已批准」分頁列出已上線場地
+   - 批量：每卡 checkbox＋全選，底部操作列「批量批准／批量拒絕」（逐張 PATCH 現有 API）
+   - 圖片：兩個 server 代理 route，**bot token 同 file_id 唔落瀏覽器**
+     - 公開 `/api/photos/listing/[id]/[index]`：只 approved draft 先有相
+     - 審核 `/api/photos/intake/[intakeId]/[index]`：要 review cookie
+     - 重用 `telegram-photo.ts` 抽出嘅 `downloadTelegramPhoto()`
+   - 審核卡顯示縮圖（可點大圖）；公開 listing 卡第一張做封面＋其餘縮圖列
+   - 公開 DTO 只加 `photoCount`（安全），唔回傳 intake id／file_id；**唔使 migration**
 
 ---
 
 ## 3. 未做（下一步，按順序）
 
-7. **IG／FB 帖文草稿生成（slice 5，下一步）** — 7 種草稿類型（見 spec 第 10 節），
+8. **IG／FB 帖文草稿生成（slice 5，下一步）** — 7 種草稿類型（見 spec 第 10 節），
    初期人手貼，唔好做全自動發布。
-8. 圖片處理打磨、Instagram 連結處理（photo OCR 已做底；公開頁暫唔顯示相）。
+9. Instagram 連結處理打磨（photo OCR 同公開顯示相已做底）。
 
 ---
 

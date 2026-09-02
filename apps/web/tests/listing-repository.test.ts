@@ -76,7 +76,7 @@ describe("mapRowToPublicListing", () => {
       report_count: 3,
       last_reviewed_at: "2026-09-01T00:00:00.000Z",
       created_at: "2026-09-01T00:00:00.000Z",
-      intake: { source_label: "TG group", source_url: null },
+      intake: { source_label: "TG group", source_url: null, photo_file_ids: ["a", "b"] },
     });
     expect(dto).toMatchObject({
       id: "x",
@@ -87,6 +87,7 @@ describe("mapRowToPublicListing", () => {
       priceAmountHkd: 800,
       allowsFood: true,
       reportCount: 3,
+      photoCount: 2,
       sourceLabel: "TG group",
     });
     // 內部欄位唔可以喺公開 DTO 出現。
@@ -145,7 +146,9 @@ describe("listApprovedListings", () => {
     const result = await repo.listApprovedListings();
 
     expect(supabase.from).toHaveBeenCalledWith("venue_drafts");
-    expect(calls.selectQuery).toContain("intake:intake_items(source_label, source_url)");
+    expect(calls.selectQuery).toContain(
+      "intake:intake_items(source_label, source_url, photo_file_ids)",
+    );
     expect(selectChain.eq).toHaveBeenCalledWith("status", "approved");
     expect(result).toEqual([]);
   });

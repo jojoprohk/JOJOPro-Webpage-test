@@ -32,7 +32,11 @@ interface ApprovedListingRow {
   report_count: number | null;
   last_reviewed_at: string | null;
   created_at: string;
-  intake: { source_label: string; source_url: string | null } | null;
+  intake: {
+    source_label: string;
+    source_url: string | null;
+    photo_file_ids: string[] | null;
+  } | null;
 }
 
 export function mapRowToPublicListing(row: ApprovedListingRow): PublicListing {
@@ -66,6 +70,8 @@ export function mapRowToPublicListing(row: ApprovedListingRow): PublicListing {
     sourceUrl: row.intake?.source_url ?? null,
     lastReviewedAt: row.last_reviewed_at,
     reportCount: row.report_count ?? 0,
+    // 公開只暴露相嘅數量，唔暴露 intake id 或 file_id。
+    photoCount: row.intake?.photo_file_ids?.length ?? 0,
     createdAt: row.created_at,
   };
 }
@@ -89,7 +95,7 @@ export function createListingRepository(
             "contact_whatsapp_link, has_aircon, is_prime_spot, is_cart_spot, allows_food, " +
             "allows_dry_goods, allows_beauty, allows_service, requires_product_approval, " +
             "is_urgent, is_discounted, summary, report_count, last_reviewed_at, created_at, " +
-            "intake:intake_items(source_label, source_url)",
+            "intake:intake_items(source_label, source_url, photo_file_ids)",
         )
         .eq("status", "approved")
         .order("created_at", { ascending: false });
