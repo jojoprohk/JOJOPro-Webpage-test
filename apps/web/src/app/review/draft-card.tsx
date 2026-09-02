@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   AREA_LABELS,
   AREA_TYPES,
@@ -53,6 +53,9 @@ export function DraftCard({
   const photoIds = draft.intake?.photo_file_ids ?? [];
   const photoCount = photoIds.length;
 
+  // 用 ref 永遠指向最新嘅 act（含最新表單值），批量操作先唔會用到舊狀態。
+  const actRef = useRef<CardAct>(async () => false);
+
   const hl = (camel: string): CSSProperties =>
     low.has(camel)
       ? { background: "#fff3cd", borderColor: "#e0a800" }
@@ -89,10 +92,11 @@ export function DraftCard({
     }
   };
 
+  actRef.current = act;
+
   useEffect(() => {
-    registerAct(draft.id, act);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft.id, form]);
+    registerAct(draft.id, async (action) => actRef.current(action));
+  }, [draft.id, registerAct]);
 
   const done = status === "approved" || status === "rejected";
   const disabled = busy || done;
