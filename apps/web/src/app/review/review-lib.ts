@@ -1,11 +1,21 @@
 "use client";
 
+import {
+  HK_DISTRICTS,
+  resolveVenuePhotos,
+  type AreaType,
+  type VenuePhoto,
+} from "@jojopro/ai";
+
+export { HK_DISTRICTS };
+
 export type Draft = {
   id: string;
   intake_item_id: string | null;
   title: string;
   district: string | null;
   venue_name: string | null;
+  photos: VenuePhoto[] | null;
   session_dates: string[] | null;
   start_date: string | null;
   end_date: string | null;
@@ -40,6 +50,7 @@ export type DraftForm = {
   title: string;
   district: string;
   venueName: string;
+  photos: VenuePhoto[];
   startDate: string;
   endDate: string;
   priceText: string;
@@ -53,6 +64,11 @@ export type DraftForm = {
   isPrimeSpot: boolean;
 };
 
+// 草稿實際展示嘅相：DB photos 為空（舊數據）就按場地類型 fallback 一張 stock。
+export function draftPhotos(d: Draft): VenuePhoto[] {
+  return resolveVenuePhotos(d.photos, (d.area_type as AreaType) ?? "unknown");
+}
+
 export const AREA_TYPES = [
   "mall",
   "market",
@@ -60,6 +76,8 @@ export const AREA_TYPES = [
   "industrial",
   "pop_up_event",
   "private_venue",
+  "exhibition",
+
   "other",
   "unknown",
 ];
@@ -71,6 +89,7 @@ export const AREA_LABELS: Record<string, string> = {
   industrial: "工廈",
   pop_up_event: "Pop-up 活動",
   private_venue: "私人場地",
+  exhibition: "展銷位",
   other: "其他",
   unknown: "未分類",
 };
@@ -80,6 +99,7 @@ export function toForm(d: Draft): DraftForm {
     title: d.title ?? "",
     district: d.district ?? "",
     venueName: d.venue_name ?? "",
+    photos: draftPhotos(d),
     startDate: d.start_date ?? "",
     endDate: d.end_date ?? "",
     priceText: d.price_text ?? "",
@@ -99,6 +119,7 @@ export function formToFields(f: DraftForm) {
     title: f.title,
     district: f.district || null,
     venueName: f.venueName || null,
+    photos: f.photos,
     startDate: f.startDate || null,
     endDate: f.endDate || null,
     priceText: f.priceText || null,

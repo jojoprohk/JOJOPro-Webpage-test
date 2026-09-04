@@ -46,6 +46,16 @@ function matchesQuery(listing: PublicListing, q: string): boolean {
   if (needle === "") {
     return true;
   }
+  // 地區搜尋：資料庫 district 用標準 18 區名（「油尖旺區」），但用戶多數
+  // 打口語名（「旺角」）或大區統稱（「九龍」）。先擴展成地區關鍵字群組：
+  // 命中群組其中一個區名即當符合。
+  const districtGroup = DISTRICT_QUERY_GROUPS[needle];
+  if (districtGroup) {
+    const d = (listing.district ?? "").toLowerCase();
+    if (districtGroup.some((name) => d === name.toLowerCase())) {
+      return true;
+    }
+  }
   const haystack = [
     listing.title,
     listing.district,
@@ -57,6 +67,94 @@ function matchesQuery(listing: PublicListing, q: string): boolean {
     .toLowerCase();
   return haystack.includes(needle);
 }
+
+// 地區下拉：18 區標準名，或三大區統稱（港島／九龍／新界）。
+const DISTRICT_MACRO_GROUPS: Record<string, string[]> = {
+  hong_kong_island: ["中西區", "灣仔區", "東區", "南區"],
+  kowloon: ["油尖旺區", "深水埗區", "九龍城區", "黃大仙區", "觀塘區"],
+  new_territories: [
+    "葵青區", "荃灣區", "屯門區", "元朗區", "北區", "大埔區",
+    "沙田區", "西貢區", "離島區",
+  ],
+};
+
+function matchesDistrict(listing: PublicListing, district: string): boolean {
+  if (!listing.district) return false;
+  const group = DISTRICT_MACRO_GROUPS[district];
+  if (group) return group.includes(listing.district);
+  return listing.district === district;
+}
+
+// 口語／別名 → 標準 18 區。搜尋地區時用嚟把關：用戶打「旺角」或「九龍」
+// 都可以對到「油尖旺區」／九龍五區。key 一律小寫、去空白。
+const DISTRICT_ALIAS: Record<string, string> = {
+  中環: "中西區", 上環: "中西區", 金鐘: "中西區", 西環: "中西區", 堅尼地城: "中西區",
+  灣仔: "灣仔區", 銅鑼灣: "灣仔區", 銅鑼湾: "灣仔區", 銅鑼: "灣仔區", 跑馬地: "灣仔區",
+  北角: "東區", 鰂魚涌: "東區", 太古: "東區", 西灣河: "東區", 筲箕灣: "東區",
+  柴灣: "東區", 杏花邨: "東區", 康怡: "東區", 太古城: "東區",
+  香港仔: "南區", 鴨脷洲: "南區", 赤柱: "南區", 薄扶林: "南區", 數碼港: "南區",
+  華富: "南區", 海怡: "南區", 田灣: "南區",
+  旺角: "油尖旺區", 尖沙咀: "油尖旺區", 尖沙嘴: "油尖旺區", 佐敦: "油尖旺區",
+  油麻地: "油尖旺區", 大角咀: "油尖旺區", 奧海城: "油尖旺區", 朗豪坊: "油尖旺區",
+  深水埗: "深水埗區", 長沙灣: "深水埗區", 石硤尾: "深水埗區", 荔枝角: "深水埗區",
+  美孚: "深水埗區", 南昌: "深水埗區",
+  九龍城: "九龍城區", 紅磡: "九龍城區", 土瓜灣: "九龍城區", 何文田: "九龍城區",
+  黃埔: "九龍城區", 啟德: "九龍城區", 启德: "九龍城區",
+  黃大仙: "黃大仙區", 乐富: "黃大仙區", 樂富: "黃大仙區", 鑽石山: "黃大仙區",
+  彩虹: "黃大仙區", 慈雲山: "黃大仙區", 新蒲崗: "黃大仙區",
+  觀塘: "觀塘區", 观塘: "觀塘區", 牛頭角: "觀塘區", 九龍灣: "觀塘區",
+  秀茂坪: "觀塘區", 藍田: "觀塘區", 油塘: "觀塘區", apm: "觀塘區", 德福: "觀塘區",
+  淘大: "觀塘區",
+  葵涌: "葵青區", 葵芳: "葵青區", 青衣: "葵青區", 葵青: "葵青區",
+  荃灣: "荃灣區",
+  屯門: "屯門區",
+  元朗: "元朗區", 天水圍: "元朗區",
+  上水: "北區", 粉嶺: "北區",
+  大埔: "大埔區",
+  沙田: "沙田區", 馬鞍山: "沙田區",
+  將軍澳: "西貢區", 将军澳: "西貢區", 西貢: "西貢區", 西贡: "西貢區", 坑口: "西貢區", 寶琳: "西貢區",
+  東涌: "離島區", 东涌: "離島區", 長洲: "離島區", 大嶼山: "離島區", 愉景灣: "離島區",
+};
+
+const HONG_KONG_ISLAND = ["中西區", "灣仔區", "東區", "南區"];
+const KOWLOON = ["油尖旺區", "深水埗區", "九龍城區", "黃大仙區", "觀塘區"];
+const NEW_TERRITORIES = [
+  "葵青區", "荃灣區", "屯門區", "元朗區", "北區", "大埔區",
+  "沙田區", "西貢區", "離島區",
+];
+
+const MACRO_GROUPS: Record<string, string[]> = {
+  港島: HONG_KONG_ISLAND,
+  香港島: HONG_KONG_ISLAND,
+  香港: HONG_KONG_ISLAND,
+  九龍: KOWLOON,
+  九龍區: KOWLOON,
+  新界: NEW_TERRITORIES,
+  離島: ["離島區"],
+};
+
+// 預先組好「搜尋詞 → 會命中嘅標準區名群組」。標準區名自己都係群組（一個區）。
+const DISTRICT_QUERY_GROUPS: Record<string, string[]> = (() => {
+  const map: Record<string, string[]> = {};
+  for (const [alias, canonical] of Object.entries(DISTRICT_ALIAS)) {
+    map[alias.toLowerCase()] = [canonical];
+  }
+  for (const [key, group] of Object.entries(MACRO_GROUPS)) {
+    map[key.toLowerCase()] = group;
+  }
+  // 標準區名（「油尖旺區」）自己對自己；容許唔打「區」字（「油尖旺」）。
+  const allDistricts = new Set<string>([
+    ...Object.values(DISTRICT_ALIAS),
+    ...HONG_KONG_ISLAND,
+    ...KOWLOON,
+    ...NEW_TERRITORIES,
+  ]);
+  for (const d of allDistricts) {
+    map[d.toLowerCase()] = [d];
+    map[d.replace(/區$/, "").toLowerCase()] = [d];
+  }
+  return map;
+})();
 
 export function matchesFilters(
   listing: PublicListing,
@@ -74,6 +172,14 @@ export function matchesFilters(
   }
 
   if (!matchesQuery(listing, filters.q)) {
+    return false;
+  }
+
+  if (filters.areaType && listing.areaType !== filters.areaType) {
+    return false;
+  }
+
+  if (filters.district && !matchesDistrict(listing, filters.district)) {
     return false;
   }
 
@@ -154,6 +260,21 @@ export function parseFilters(
   const dateRaw = first("date") ?? "";
   const date = DATE_RE.test(dateRaw) ? dateRaw : null;
 
+  const areaTypeRaw = (first("areaType") ?? "").trim();
+  const areaType =
+    areaTypeRaw !== "" &&
+    ["mall", "market", "street", "industrial", "pop_up_event", "private_venue", "other", "exhibition", "unknown"].includes(areaTypeRaw)
+      ? areaTypeRaw
+      : null;
+
+  const districtRaw = (first("district") ?? "").trim();
+  const district =
+    districtRaw !== "" &&
+    (DISTRICT_MACRO_GROUPS[districtRaw] !== undefined ||
+      /^[\u4e00-\u9fff]{2,4}區$/.test(districtRaw))
+      ? districtRaw
+      : null;
+
   const budgetRaw = first("maxBudget") ?? "";
   const budgetNum = Number(budgetRaw);
   const maxBudget =
@@ -164,6 +285,8 @@ export function parseFilters(
   return {
     q,
     date,
+    areaType,
+    district,
     maxBudget,
     food: isTruthyFlag(first("food")),
     aircon: isTruthyFlag(first("aircon")),

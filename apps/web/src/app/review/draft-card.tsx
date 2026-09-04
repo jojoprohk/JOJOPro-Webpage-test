@@ -1,35 +1,202 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState } from "react";
+import {
+  CheckCircle2,
+  XCircle,
+  ChevronDown,
+  ChevronUp,
+  Save,
+  Trash2,
+  ArrowLeft,
+  ArrowRight,
+  ImageOff,
+} from "lucide-react";
 import {
   AREA_LABELS,
   AREA_TYPES,
+  HK_DISTRICTS,
   formToFields,
   lowConfidenceSet,
   toForm,
   type Draft,
   type DraftForm,
 } from "./review-lib";
+import type { VenuePhoto } from "@jojopro/ai";
 
-const labelStyle: CSSProperties = {
-  fontSize: 12,
-  color: "#555",
-  display: "block",
-  marginTop: 8,
+export type CardStatus =
+  | "pending"
+  | "saving"
+  | "approving"
+  | "approved"
+  | "rejecting"
+  | "rejected"
+  | "error";
+
+// 暴露畀父層做批量操作：用卡入面最新表單值執行 action。
+export type CardAct = (
+  action: "approve" | "reject" | "save",
+) => Promise<boolean>;
+
+type IntakePhoto = { fileId: string; index: number };
+
+const STOCK_FILE: Record<string, string> = {
+  mall: "mall",
+  market: "market",
+  street: "street",
+  industrial: "industrial",
+  pop_up_event: "pop-up",
+  private_venue: "private-venue",
+  exhibition: "exhibition",
+  other: "hong-kong-shop",
+  unknown: "hong-kong-shop",
 };
-const inputStyle: CSSProperties = {
-  width: "100%",
-  padding: "6px 8px",
-  border: "1px solid #ccc",
-  borderRadius: 6,
-  fontSize: 14,
-  boxSizing: "border-box",
-};
 
-export type CardStatus = "pending" | "approving" | "approved" | "rejecting" | "rejected" | "error";
+function stockSrcForAreaType(t: string): string {
+  return `/stock/${STOCK_FILE[t] ?? "hong-kong-shop"}.jpg`;
+}
 
-// 暴露畀父層做批量操作：用卡入面最新表單值執行 approve/reject。
-export type CardAct = (action: "approve" | "reject") => Promise<boolean>;
+function photoUrl(draftId: string, photo: VenuePhoto, index: number): string {
+  if (photo.kind === "stock") return photo.src;
+  return `/api/photos/draft/${draftId}/${index}`;
+}
+
+function PhotoEditor({
+  draftId,
+  photos,
+  intakePhotos,
+  onChange,
+}: {
+  draftId: string;
+  photos: VenuePhoto[];
+  intakePhotos: IntakePhoto[];
+  onChange: (next: VenuePhoto[]) => void;
+}) {
+  const move = (i: number, dir: -1 | 1) => {
+    const j = i + dir;
+    if (j < 0 || j >= photos.length) return;
+    const next = [...photos];
+    const a = next[i];
+    const b = next[j];
+    if (a && b) {
+      next[i] = b;
+      next[j] = a;
+    }
+    onChange(next);
+  };
+  const remove = (i: number) =>
+    onChange(photos.filter((_, idx) => idx !== i));
+  const addTelegram = (fileId: string) => {
+    if (photos.some((p) => p.kind === "telegram" && p.fileId === fileId)) return;
+    onChange([...photos, { kind: "telegram", fileId }]);
+  };
+  const addStock = (src: string) => {
+    onChange([...photos, { kind: "stock", src }]);
+  };
+
+  const usedFileIds = new Set(
+    photos
+      .filter(
+        (p): p is Extract<VenuePhoto, { kind: "telegram" }> =>
+          p.kind === "telegram",
+      )
+      .map((p) => p.fileId),
+  );
+  const availableIntake = intakePhotos.filter((p) => !usedFileIds.has(p.fileId));
+
+  return (
+    <div className="photo-editor">
+      <div className="photo-editor__grid">
+        {photos.length === 0 && (
+          <div className="photo-editor__empty">
+            <ImageOff size={16} /> 未選取展示相（公開頁會自動用代表相）
+          </div>
+        )}
+        {photos.map((photo, i) => (
+          <div className="photo-editor__item" key={`${photo.kind}-${i}`}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={photoUrl(draftId, photo, i)}
+              alt={`展示相 ${i + 1}`}
+              loading="lazy"
+            />
+            <span className="photo-editor__tag">
+              {photo.kind === "telegram" ? "真實相" : "代表相"}
+            </span>
+            <div className="photo-editor__ctrls">
+              <button
+                type="button"
+                title="向左"
+                disabled={i === 0}
+                onClick={() => move(i, -1)}
+              >
+                <ArrowLeft size={13} />
+              </button>
+              <button
+                type="button"
+                title="向右"
+                disabled={i === photos.length - 1}
+                onClick={() => move(i, 1)}
+              >
+                <ArrowRight size={13} />
+              </button>
+              <button
+                type="button"
+                title="刪除"
+                className="danger"
+                onClick={() => remove(i)}
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="photo-editor__add">
+        {availableIntake.length > 0 && (
+          <label className="rv-label">
+            加入 Telegram 原始相
+            <select
+              className="rv-field"
+              value=""
+              onChange={(e) => {
+                const idx = Number(e.target.value);
+                const p = intakePhotos[idx];
+                if (p) addTelegram(p.fileId);
+              }}
+            >
+              <option value="">— 揀一張原始相加入 —</option>
+              {availableIntake.map((p) => (
+                <option key={p.fileId} value={p.index}>
+                  原始相 #{p.index + 1}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <label className="rv-label">
+          加入代表相（按場地類型）
+          <select
+            className="rv-field"
+            value=""
+            onChange={(e) => {
+              const t = e.target.value;
+              if (t) addStock(stockSrcForAreaType(t));
+            }}
+          >
+            <option value="">— 揀代表相類型 —</option>
+            {AREA_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {AREA_LABELS[t]}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+    </div>
+  );
+}
 
 export function DraftCard({
   draft,
@@ -41,26 +208,24 @@ export function DraftCard({
   draft: Draft;
   selected: boolean;
   onToggleSelect: (id: string, checked: boolean) => void;
-  onResult: (id: string, action: "approve" | "reject") => void;
+  onResult: (id: string, action: "approve" | "reject" | "save") => void;
   registerAct: (id: string, act: CardAct) => void;
 }) {
   const [form, setForm] = useState<DraftForm>(() => toForm(draft));
   const [busy, setBusy] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
   const [error, setError] = useState("");
+  const [savedFlash, setSavedFlash] = useState(false);
   const [status, setStatus] = useState<CardStatus>("pending");
   const low = lowConfidenceSet(draft);
-  const photoIds = draft.intake?.photo_file_ids ?? [];
-  const photoCount = photoIds.length;
 
-  // 用 ref 永遠指向最新嘅 act（含最新表單值），批量操作先唔會用到舊狀態。
+  const intakePhotos: IntakePhoto[] = (
+    draft.intake?.photo_file_ids ?? []
+  ).map((fileId, index) => ({ fileId, index }));
+
   const actRef = useRef<CardAct>(async () => false);
 
-  const hl = (camel: string): CSSProperties =>
-    low.has(camel)
-      ? { background: "#fff3cd", borderColor: "#e0a800" }
-      : {};
-
+  const lowClass = (camel: string) => (low.has(camel) ? " rv-field--low" : "");
   const set = <K extends keyof DraftForm>(key: K, value: DraftForm[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
@@ -68,7 +233,13 @@ export function DraftCard({
     if (busy) return false;
     setBusy(true);
     setError("");
-    setStatus(action === "approve" ? "approving" : "rejecting");
+    setStatus(
+      action === "approve"
+        ? "approving"
+        : action === "reject"
+          ? "rejecting"
+          : "saving",
+    );
     try {
       const res = await fetch(`/api/review/drafts/${draft.id}`, {
         method: "PATCH",
@@ -81,14 +252,21 @@ export function DraftCard({
         };
         throw new Error(data.error ?? `HTTP ${res.status}`);
       }
-      setStatus(action === "approve" ? "approved" : "rejected");
+      if (action === "save") {
+        setStatus("pending");
+        setSavedFlash(true);
+        setTimeout(() => setSavedFlash(false), 2500);
+      } else {
+        setStatus(action === "approve" ? "approved" : "rejected");
+      }
       onResult(draft.id, action);
       return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : "操作失敗");
       setStatus("error");
-      setBusy(false);
       return false;
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -101,70 +279,34 @@ export function DraftCard({
   const done = status === "approved" || status === "rejected";
   const disabled = busy || done;
 
+  const cardClass =
+    "draft-card" +
+    (status === "approved"
+      ? " draft-card--approved"
+      : status === "rejected"
+        ? " draft-card--rejected"
+        : selected
+          ? " draft-card--selected"
+          : "") +
+    (done ? " is-done" : "");
+
   return (
-    <div
-      style={{
-        border:
-          status === "approved"
-            ? "1px solid #1a7f37"
-            : status === "rejected"
-              ? "1px solid #c0392b"
-              : selected
-                ? "1px solid #0b63ce"
-                : "1px solid #ddd",
-        borderRadius: 8,
-        padding: 16,
-        marginBottom: 16,
-        background: "#fff",
-        opacity: done ? 0.85 : 1,
-      }}
-    >
+    <div className={cardClass}>
       {status === "approved" && (
-        <div
-          style={{
-            background: "#e6f4ea",
-            color: "#1a7f37",
-            padding: "8px 12px",
-            borderRadius: 6,
-            marginBottom: 12,
-            fontWeight: 600,
-          }}
-        >
-          ✓ 已批准，已發布去公開頁
+        <div className="status-banner status-banner--ok">
+          <CheckCircle2 />
+          已批准，已發布去公開頁
         </div>
       )}
       {status === "rejected" && (
-        <div
-          style={{
-            background: "#fdecea",
-            color: "#c0392b",
-            padding: "8px 12px",
-            borderRadius: 6,
-            marginBottom: 12,
-            fontWeight: 600,
-          }}
-        >
+        <div className="status-banner status-banner--reject">
+          <XCircle />
           已拒絕
         </div>
       )}
 
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          gap: 8,
-          alignItems: "center",
-        }}
-      >
-        <label
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            fontSize: 16,
-            fontWeight: 700,
-          }}
-        >
+      <div className="draft-head">
+        <label className="draft-check">
           <input
             type="checkbox"
             checked={selected}
@@ -173,109 +315,88 @@ export function DraftCard({
           />
           {draft.title || "（無標題）"}
         </label>
-        <span style={{ fontSize: 12, color: "#888", whiteSpace: "nowrap" }}>
-          信心 {draft.confidence_score} · {draft.intake?.source_label ?? ""}
-          {photoCount > 0 ? ` · ${photoCount} 相` : ""}
+        <span className="draft-meta">
+          信心 <b>{draft.confidence_score}</b> · {draft.intake?.source_label ?? ""}
+          {intakePhotos.length > 0 ? ` · ${intakePhotos.length} 原始相` : ""}
         </span>
       </div>
-
-      {photoCount > 0 && draft.intake_item_id && (
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            marginTop: 10,
-            overflowX: "auto",
-            paddingBottom: 4,
-          }}
-        >
-          {photoIds.map((_, i) => (
-            <a
-              key={i}
-              href={`/api/photos/intake/${draft.intake_item_id}/${i}`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={`/api/photos/intake/${draft.intake_item_id}/${i}`}
-                alt={`相 ${i + 1}`}
-                loading="lazy"
-                style={{
-                  width: 96,
-                  height: 96,
-                  objectFit: "cover",
-                  borderRadius: 6,
-                  border: "1px solid #e7e5e4",
-                  display: "block",
-                }}
-              />
-            </a>
-          ))}
-        </div>
-      )}
 
       <fieldset
         disabled={disabled}
         style={{ border: "none", padding: 0, margin: 0 }}
       >
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <label className="rv-label">展示相（公開頁用，可增刪／調位）</label>
+        <PhotoEditor
+          draftId={draft.id}
+          photos={form.photos}
+          intakePhotos={intakePhotos}
+          onChange={(next) => set("photos", next)}
+        />
+
+        <div className="draft-grid">
           <div>
-            <label style={labelStyle}>標題</label>
+            <label className="rv-label">標題</label>
             <input
-              style={{ ...inputStyle, ...hl("title") }}
+              className={"rv-field" + lowClass("title")}
               value={form.title}
               onChange={(e) => set("title", e.target.value)}
             />
-            <label style={labelStyle}>地區</label>
-            <input
-              style={{ ...inputStyle, ...hl("district") }}
+            <label className="rv-label">地區（香港 18 區）</label>
+            <select
+              className={"rv-field" + lowClass("district")}
               value={form.district}
               onChange={(e) => set("district", e.target.value)}
-            />
-            <label style={labelStyle}>場地名</label>
+            >
+              <option value="">— 未分區（待審核）—</option>
+              {HK_DISTRICTS.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+            <label className="rv-label">場地名</label>
             <input
-              style={{ ...inputStyle, ...hl("venueName") }}
+              className={"rv-field" + lowClass("venueName")}
               value={form.venueName}
               onChange={(e) => set("venueName", e.target.value)}
             />
-            <label style={labelStyle}>開始日期</label>
+            <label className="rv-label">開始日期</label>
             <input
-              style={{ ...inputStyle, ...hl("startDate") }}
+              className={"rv-field" + lowClass("startDate")}
               type="date"
               value={form.startDate}
               onChange={(e) => set("startDate", e.target.value)}
             />
-            <label style={labelStyle}>結束日期</label>
+            <label className="rv-label">結束日期</label>
             <input
-              style={{ ...inputStyle, ...hl("endDate") }}
+              className={"rv-field" + lowClass("endDate")}
               type="date"
               value={form.endDate}
               onChange={(e) => set("endDate", e.target.value)}
             />
-            <label style={labelStyle}>價錢（原文）</label>
+            <label className="rv-label">價錢（原文）</label>
             <input
-              style={{ ...inputStyle, ...hl("priceText") }}
+              className={"rv-field" + lowClass("priceText")}
               value={form.priceText}
               onChange={(e) => set("priceText", e.target.value)}
             />
-            <label style={labelStyle}>尺寸（原文）</label>
+            <label className="rv-label">尺寸（原文）</label>
             <input
-              style={{ ...inputStyle, ...hl("boothSizeText") }}
+              className={"rv-field" + lowClass("boothSizeText")}
               value={form.boothSizeText}
               onChange={(e) => set("boothSizeText", e.target.value)}
             />
           </div>
           <div>
-            <label style={labelStyle}>聯絡（原文）</label>
+            <label className="rv-label">聯絡（原文）</label>
             <input
-              style={{ ...inputStyle, ...hl("contactText") }}
+              className={"rv-field" + lowClass("contactText")}
               value={form.contactText}
               onChange={(e) => set("contactText", e.target.value)}
             />
-            <label style={labelStyle}>場地類型</label>
+            <label className="rv-label">場地類型</label>
             <select
-              style={inputStyle}
+              className="rv-field"
               value={form.areaType}
               onChange={(e) => set("areaType", e.target.value)}
             >
@@ -285,9 +406,9 @@ export function DraftCard({
                 </option>
               ))}
             </select>
-            <label style={labelStyle}>冷氣</label>
+            <label className="rv-label">冷氣</label>
             <select
-              style={inputStyle}
+              className="rv-field"
               value={form.hasAircon}
               onChange={(e) => set("hasAircon", e.target.value)}
             >
@@ -295,9 +416,9 @@ export function DraftCard({
               <option value="yes">有</option>
               <option value="no">冇</option>
             </select>
-            <label style={labelStyle}>可賣食品</label>
+            <label className="rv-label">可賣食品</label>
             <select
-              style={{ ...inputStyle, ...hl("allowsFood") }}
+              className={"rv-field" + lowClass("allowsFood")}
               value={form.allowsFood}
               onChange={(e) => set("allowsFood", e.target.value)}
             >
@@ -305,8 +426,8 @@ export function DraftCard({
               <option value="yes">可以</option>
               <option value="no">唔可以</option>
             </select>
-            <div style={{ marginTop: 10, display: "flex", gap: 16, fontSize: 14 }}>
-              <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <div className="rv-checks">
+              <label>
                 <input
                   type="checkbox"
                   checked={form.isUrgent}
@@ -314,7 +435,7 @@ export function DraftCard({
                 />
                 急放
               </label>
-              <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <label>
                 <input
                   type="checkbox"
                   checked={form.isDiscounted}
@@ -322,7 +443,7 @@ export function DraftCard({
                 />
                 特價
               </label>
-              <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <label>
                 <input
                   type="checkbox"
                   checked={form.isPrimeSpot}
@@ -336,79 +457,57 @@ export function DraftCard({
       </fieldset>
 
       {draft.review_note && (
-        <div style={{ fontSize: 13, color: "#8a6d00", marginTop: 8 }}>
-          AI 備註：{draft.review_note}
-        </div>
+        <div className="rv-note">AI 備註：{draft.review_note}</div>
       )}
 
       <button
         type="button"
         onClick={() => setShowRaw((s) => !s)}
-        style={{
-          marginTop: 10,
-          fontSize: 12,
-          border: "none",
-          background: "none",
-          color: "#0b63ce",
-          cursor: "pointer",
-        }}
+        className="rv-raw-toggle"
       >
-        {showRaw ? "收起" : "睇原始貼文"}
+        {showRaw ? (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+            收起原始貼文 <ChevronUp style={{ width: 13, height: 13 }} />
+          </span>
+        ) : (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+            睇原始貼文 <ChevronDown style={{ width: 13, height: 13 }} />
+          </span>
+        )}
       </button>
       {showRaw && draft.intake && (
-        <pre
-          style={{
-            whiteSpace: "pre-wrap",
-            background: "#f6f6f6",
-            padding: 10,
-            borderRadius: 6,
-            fontSize: 12,
-            maxHeight: 200,
-            overflow: "auto",
-          }}
-        >
-          {draft.intake.raw_content}
-        </pre>
+        <pre className="rv-raw">{draft.intake.raw_content}</pre>
       )}
 
-      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+      <div className="rv-actions">
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => void act("save")}
+          className="btn btn--secondary"
+        >
+          <Save />
+          {status === "saving" ? "儲存中…" : savedFlash ? "已儲存 ✓" : "儲存改動"}
+        </button>
         <button
           type="button"
           disabled={disabled}
           onClick={() => void act("approve")}
-          style={{
-            padding: "8px 18px",
-            background: "#1a7f37",
-            color: "#fff",
-            border: "none",
-            borderRadius: 6,
-            cursor: disabled ? "default" : "pointer",
-            fontSize: 14,
-          }}
+          className="btn btn--success"
         >
+          <CheckCircle2 />
           {status === "approving" ? "批准中…" : "批准"}
         </button>
         <button
           type="button"
           disabled={disabled}
           onClick={() => void act("reject")}
-          style={{
-            padding: "8px 18px",
-            background: "#fff",
-            color: "#c0392b",
-            border: "1px solid #c0392b",
-            borderRadius: 6,
-            cursor: disabled ? "default" : "pointer",
-            fontSize: 14,
-          }}
+          className="btn btn--danger"
         >
+          <XCircle />
           {status === "rejecting" ? "拒絕中…" : "拒絕"}
         </button>
-        {error && (
-          <span style={{ color: "#c0392b", fontSize: 13, alignSelf: "center" }}>
-            {error}
-          </span>
-        )}
+        {error && <span className="rv-error">{error}</span>}
       </div>
     </div>
   );

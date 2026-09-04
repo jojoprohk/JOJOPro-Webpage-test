@@ -3,7 +3,7 @@ import {
   type IntakeInput,
   type JsonCompleter,
   type ParseResult,
-} from "@jopojo/ai";
+} from "@jojopro/ai";
 import {
   parseTelegramVenueUpdate,
   type TelegramUpdate,

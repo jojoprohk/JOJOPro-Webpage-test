@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-export const REVIEW_COOKIE_NAME = "jopojo_review_session";
+export const REVIEW_COOKIE_NAME = "jojopro_review_session";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 12; // 12 小時
 
 function getSecret(): string {

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export type ReviewAction = "approve" | "reject";
+export type ReviewAction = "approve" | "reject" | "save";
 
 // 審核頁可以改嘅欄位（camelCase -> 資料庫 snake_case）。
 // 呢個白名單係唯一容許寫入嘅欄位，防止 API 接受任意欄位。
@@ -18,6 +18,7 @@ const EDITABLE_FIELD_MAP: Record<string, string> = {
   contactText: "contact_text",
   contactWhatsappLink: "contact_whatsapp_link",
   areaType: "area_type",
+  photos: "photos",
   hasAircon: "has_aircon",
   isPrimeSpot: "is_prime_spot",
   isCartSpot: "is_cart_spot",
@@ -31,7 +32,12 @@ const EDITABLE_FIELD_MAP: Record<string, string> = {
   summary: "summary",
 };
 
-function isEditableValue(value: unknown): boolean {
+function isEditableValue(value: unknown, key: string): boolean {
+  // photos 係結構化物件陣列，由 route 層用 coerceVenuePhotos 驗證後先傳入，
+  // 呢度只容許陣列（元素型別喺 route 層把關）。
+  if (key === "photos") {
+    return Array.isArray(value);
+  }
   return (
     value === null ||
     typeof value === "string" ||
@@ -50,15 +56,19 @@ export function buildDraftUpdate(
   reviewNote: string | undefined,
   nowIso: string,
 ): Record<string, unknown> {
-  const row: Record<string, unknown> = {
-    status: action === "approve" ? "approved" : "rejected",
-    last_reviewed_at: nowIso,
-  };
+  const row: Record<string, unknown> = {};
+
+  // save = 只儲存改動，唔改狀態（草稿維持 needs_review）；updated_at 由
+  // DB trigger 自動更新。approve/reject 先改 status 同 last_reviewed_at。
+  if (action === "approve" || action === "reject") {
+    row.status = action === "approve" ? "approved" : "rejected";
+    row.last_reviewed_at = nowIso;
+  }
 
   if (fields) {
     for (const [camelKey, value] of Object.entries(fields)) {
       const snakeKey = EDITABLE_FIELD_MAP[camelKey];
-      if (snakeKey && isEditableValue(value)) {
+      if (snakeKey && isEditableValue(value, camelKey)) {
         row[snakeKey] = value;
       }
     }
@@ -87,6 +97,7 @@ export interface ReviewDraftRow {
   contact_text: string | null;
   contact_whatsapp_link: string | null;
   area_type: string;
+  photos: Array<{ kind: string; fileId?: string; src?: string }> | null;
   has_aircon: boolean | null;
   is_prime_spot: boolean;
   is_cart_spot: boolean;

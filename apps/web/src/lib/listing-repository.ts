@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { resolveVenuePhotos, type AreaType, type VenuePhoto } from "@jojopro/ai";
 import type { PublicListing } from "./listing-types.js";
 
 // 資料庫 row（snake_case）→ 公開 DTO（camelCase）。
@@ -9,6 +10,7 @@ interface ApprovedListingRow {
   district: string | null;
   venue_name: string | null;
   area_type: string;
+  photos: VenuePhoto[] | null;
   start_date: string | null;
   end_date: string | null;
   session_dates: string[] | null;
@@ -35,7 +37,6 @@ interface ApprovedListingRow {
   intake: {
     source_label: string;
     source_url: string | null;
-    photo_file_ids: string[] | null;
   } | null;
 }
 
@@ -70,8 +71,9 @@ export function mapRowToPublicListing(row: ApprovedListingRow): PublicListing {
     sourceUrl: row.intake?.source_url ?? null,
     lastReviewedAt: row.last_reviewed_at,
     reportCount: row.report_count ?? 0,
-    // 公開只暴露相嘅數量，唔暴露 intake id 或 file_id。
-    photoCount: row.intake?.photo_file_ids?.length ?? 0,
+    // 相數量由草稿自己嘅展示相列表計（冇真實相時 fallback 一張 stock 代表相，
+    // 所以每個 listing 至少有 1 張）。唔暴露 intake id 或 file_id。
+    photoCount: resolveVenuePhotos(row.photos, (row.area_type as AreaType) ?? "unknown").length,
     createdAt: row.created_at,
   };
 }
@@ -91,11 +93,11 @@ export function createListingRepository(
         .from("venue_drafts")
         .select(
           "id, title, district, venue_name, area_type, start_date, end_date, session_dates, " +
-            "price_text, price_amount_hkd, price_unit, booth_size_text, contact_text, " +
-            "contact_whatsapp_link, has_aircon, is_prime_spot, is_cart_spot, allows_food, " +
+          "price_text, price_amount_hkd, price_unit, booth_size_text, contact_text, " +
+            "contact_whatsapp_link, has_aircon, photos, is_prime_spot, is_cart_spot, allows_food, " +
             "allows_dry_goods, allows_beauty, allows_service, requires_product_approval, " +
             "is_urgent, is_discounted, summary, report_count, last_reviewed_at, created_at, " +
-            "intake:intake_items(source_label, source_url, photo_file_ids)",
+            "intake:intake_items(source_label, source_url)",
         )
         .eq("status", "approved")
         .order("created_at", { ascending: false });

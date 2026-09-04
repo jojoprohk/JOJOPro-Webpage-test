@@ -1,4 +1,4 @@
-import type { IntakeInput } from "@jopojo/ai";
+import type { IntakeInput } from "@jojopro/ai";
 
 type TelegramChatType = "private" | "group" | "supergroup" | "channel";
 

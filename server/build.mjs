@@ -37,7 +37,7 @@ await build({
   sourcemap: true,
   logLevel: "info",
   alias: {
-    "@jopojo/ai": path.join(root, "packages/ai/src/index.ts"),
+    "@jojopro/ai": path.join(root, "packages/ai/src/index.ts"),
   },
   plugins: [tsExtensionPlugin],
 });

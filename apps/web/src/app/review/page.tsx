@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ClipboardCheck, Lock, ArrowLeft, CheckCircle2, XCircle } from "lucide-react";
 import { DraftCard, type CardAct } from "./draft-card";
 import { ApprovedCard } from "./approved-card";
+import { Reveal, RevealGrid } from "../components/motion.js";
 import type { Draft } from "./review-lib";
 
 type Tab = "pending" | "approved";
@@ -92,8 +94,9 @@ export default function ReviewPage() {
     setSelected(checked ? new Set(list.map((d) => d.id)) : new Set());
   }
 
-  // 單張完成：短暫顯示狀態橫額後，先從待審列表移除，再刷新已批准列表。
-  function handleResult(id: string, action: "approve" | "reject") {
+  function handleResult(id: string, action: "approve" | "reject" | "save") {
+    // 純儲存：唔移走張卡，等用戶繼續改／稍後先批准。
+    if (action === "save") return;
     setSelected((prev) => {
       const next = new Set(prev);
       next.delete(id);
@@ -101,9 +104,7 @@ export default function ReviewPage() {
     });
     window.setTimeout(() => {
       setDrafts((list) => (list ?? []).filter((d) => d.id !== id));
-      if (action === "approve") {
-        void load();
-      }
+      if (action === "approve") void load();
     }, 1200);
   }
 
@@ -134,61 +135,38 @@ export default function ReviewPage() {
 
   if (authed === null) {
     return (
-      <main style={{ maxWidth: 720, margin: "40px auto", padding: 16 }}>
-        <p>載入中…</p>
+      <main className="wrap wrap--narrow loading" style={{ paddingTop: 40 }}>
+        載入中…
       </main>
     );
   }
 
   if (!authed) {
     return (
-      <main
-        style={{
-          maxWidth: 360,
-          margin: "80px auto",
-          padding: 24,
-          border: "1px solid #ddd",
-          borderRadius: 8,
-        }}
-      >
-        <h1 style={{ fontSize: 18, marginTop: 0 }}>JoPoJo 審核後台</h1>
-        <form onSubmit={login}>
-          <label style={{ fontSize: 13, color: "#555" }}>審核密碼</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoFocus
-            style={{
-              width: "100%",
-              padding: "8px",
-              margin: "6px 0 12px",
-              border: "1px solid #ccc",
-              borderRadius: 6,
-              boxSizing: "border-box",
-            }}
-          />
-          <button
-            type="submit"
-            disabled={loggingIn}
-            style={{
-              width: "100%",
-              padding: "10px",
-              background: "#222",
-              color: "#fff",
-              border: "none",
-              borderRadius: 6,
-              cursor: loggingIn ? "default" : "pointer",
-            }}
-          >
-            {loggingIn ? "登入中…" : "登入"}
-          </button>
-          {loginError && (
-            <p style={{ color: "#c0392b", fontSize: 13, marginTop: 10 }}>
-              {loginError}
-            </p>
-          )}
-        </form>
+      <main className="wrap" style={{ paddingTop: 0 }}>
+        <div className="card login-card">
+          <h1 className="login-title">
+            <Lock />
+            JoJoPro 審核後台
+          </h1>
+          <form onSubmit={login}>
+            <label htmlFor="review-password" className="field-label">
+              審核密碼
+            </label>
+            <input
+              id="review-password"
+              type="password"
+              className="field"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoFocus
+            />
+            <button type="submit" disabled={loggingIn} className="btn btn--primary btn--block">
+              {loggingIn ? "登入中…" : "登入"}
+            </button>
+            {loginError && <p className="login-error">{loginError}</p>}
+          </form>
+        </div>
       </main>
     );
   }
@@ -198,158 +176,118 @@ export default function ReviewPage() {
   const allSelected = pending.length > 0 && selected.size === pending.length;
 
   return (
-    <main style={{ maxWidth: 820, margin: "24px auto", padding: 16 }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "baseline",
-        }}
-      >
-        <h1 style={{ fontSize: 20 }}>場地審核</h1>
+    <main className="wrap wrap--narrow" style={{ paddingTop: 28 }}>
+      <div className="review-header">
+        <h1 className="review-title">
+          <ClipboardCheck />
+          場地審核
+        </h1>
+        <a href="/" className="review-home">
+          <ArrowLeft />
+          返公開頁
+        </a>
       </div>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+      <div className="tabs">
         <button
           type="button"
           onClick={() => setTab("pending")}
-          style={{
-            padding: "6px 14px",
-            borderRadius: 6,
-            border: "1px solid #ccc",
-            background: tab === "pending" ? "#222" : "#fff",
-            color: tab === "pending" ? "#fff" : "#222",
-            cursor: "pointer",
-            fontSize: 14,
-          }}
+          className={"tab" + (tab === "pending" ? " tab--active" : "")}
         >
-          待審核（{pending.length}）
+          待審核
+          <span className="tab-count">{pending.length}</span>
         </button>
         <button
           type="button"
           onClick={() => setTab("approved")}
-          style={{
-            padding: "6px 14px",
-            borderRadius: 6,
-            border: "1px solid #ccc",
-            background: tab === "approved" ? "#222" : "#fff",
-            color: tab === "approved" ? "#fff" : "#222",
-            cursor: "pointer",
-            fontSize: 14,
-          }}
+          className={"tab" + (tab === "approved" ? " tab--active" : "")}
         >
-          已批准（{approvedList.length}）
+          已批准
+          <span className="tab-count">{approvedList.length}</span>
         </button>
       </div>
 
-      {loadError && <p style={{ color: "#c0392b" }}>{loadError}</p>}
+      {loadError && <p className="review-error">{loadError}</p>}
 
       {tab === "pending" ? (
         <>
-          <p style={{ fontSize: 13, color: "#777" }}>
-            黃色格 = AI 唔肯定／要核對。改完撳「批准」；唔改就勾選左邊，用底部批量掣。
+          <p className="review-hint">
+            黃色欄位 = AI 唔肯定／要核對。改完撳「批准」；唔改就勾選左邊，用底部批量掣。
           </p>
 
-          {drafts === null && <p>載入中…</p>}
+          {drafts === null && <p className="loading">載入中…</p>}
           {drafts !== null && pending.length === 0 && (
-            <p style={{ color: "#555" }}>
+            <p className="notice">
               冇待審核草稿。將場地貼文 forward 去 Telegram bot 就會喺呢度出現。
             </p>
           )}
 
           {pending.length > 0 && (
-            <label
-              style={{
-                display: "flex",
-                gap: 8,
-                alignItems: "center",
-                fontSize: 14,
-                marginBottom: 12,
-              }}
-            >
+            <label className="select-all">
               <input
                 type="checkbox"
                 checked={allSelected}
                 onChange={(e) => toggleAll(e.target.checked)}
               />
-              全選
+              全選（{pending.length} 張）
             </label>
           )}
 
-          {pending.map((d) => (
-            <DraftCard
-              key={d.id}
-              draft={d}
-              selected={selected.has(d.id)}
-              onToggleSelect={toggleSelect}
-              onResult={handleResult}
-              registerAct={registerAct}
-            />
-          ))}
+          {drafts !== null && (
+            <RevealGrid>
+              {pending.map((d) => (
+                <DraftCard
+                  key={d.id}
+                  draft={d}
+                  selected={selected.has(d.id)}
+                  onToggleSelect={toggleSelect}
+                  onResult={handleResult}
+                  registerAct={registerAct}
+                />
+              ))}
+            </RevealGrid>
+          )}
 
           {selected.size > 0 && (
-            <div
-              style={{
-                position: "sticky",
-                bottom: 16,
-                background: "#222",
-                color: "#fff",
-                borderRadius: 8,
-                padding: "12px 16px",
-                display: "flex",
-                gap: 12,
-                alignItems: "center",
-                flexWrap: "wrap",
-              }}
-            >
-              <span style={{ fontSize: 14 }}>已選 {selected.size} 張</span>
-              <button
-                type="button"
-                disabled={batchBusy}
-                onClick={() => void runBatch("approve")}
-                style={{
-                  padding: "8px 16px",
-                  background: "#1a7f37",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: 6,
-                  cursor: batchBusy ? "default" : "pointer",
-                  fontSize: 14,
-                }}
-              >
-                {batchBusy ? "處理中…" : "批量批准"}
-              </button>
-              <button
-                type="button"
-                disabled={batchBusy}
-                onClick={() => void runBatch("reject")}
-                style={{
-                  padding: "8px 16px",
-                  background: "transparent",
-                  color: "#ffb4ab",
-                  border: "1px solid #ffb4ab",
-                  borderRadius: 6,
-                  cursor: batchBusy ? "default" : "pointer",
-                  fontSize: 14,
-                }}
-              >
-                批量拒絕
-              </button>
-              {batchMsg && (
-                <span style={{ fontSize: 13, color: "#bdf5c8" }}>{batchMsg}</span>
-              )}
-            </div>
+            <Reveal y={18}>
+              <div className="batch-bar">
+                <span className="batch-count">已選 {selected.size} 張</span>
+                <button
+                  type="button"
+                  disabled={batchBusy}
+                  onClick={() => void runBatch("approve")}
+                  className="btn btn--success btn--sm"
+                >
+                  <CheckCircle2 />
+                  {batchBusy ? "處理中…" : "批量批准"}
+                </button>
+                <button
+                  type="button"
+                  disabled={batchBusy}
+                  onClick={() => void runBatch("reject")}
+                  className="btn btn--reject-ghost btn--sm"
+                >
+                  <XCircle />
+                  批量拒絕
+                </button>
+                {batchMsg && <span className="batch-msg">{batchMsg}</span>}
+              </div>
+            </Reveal>
           )}
         </>
       ) : (
         <>
-          {approved === null && <p>載入中…</p>}
+          {approved === null && <p className="loading">載入中…</p>}
           {approved !== null && approvedList.length === 0 && (
-            <p style={{ color: "#555" }}>未有已批准場地。</p>
+            <p className="notice">未有已批准場地。</p>
           )}
-          {approvedList.map((d) => (
-            <ApprovedCard key={d.id} draft={d} />
-          ))}
+          {approved !== null && (
+            <RevealGrid>
+              {approvedList.map((d) => (
+                <ApprovedCard key={d.id} draft={d} />
+              ))}
+            </RevealGrid>
+          )}
         </>
       )}
     </main>

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-const STORAGE_KEY = "jopojo-reported-listings";
+const STORAGE_KEY = "jojopro-reported-listings";
 
 function readReported(): Set<string> {
   try {
@@ -54,11 +54,7 @@ export function ReportButton({ listingId }: { listingId: string }) {
   }
 
   if (reported) {
-    return (
-      <span style={{ fontSize: 12, color: "#16a34a" }}>
-        已回報，多謝。
-      </span>
-    );
+    return <span className="report-done">已回報，多謝。</span>;
   }
 
   return (
@@ -67,20 +63,12 @@ export function ReportButton({ listingId }: { listingId: string }) {
         type="button"
         onClick={() => void report()}
         disabled={busy}
-        style={{
-          fontSize: 12,
-          color: "#78716c",
-          background: "none",
-          border: "none",
-          padding: 0,
-          textDecoration: "underline",
-          cursor: busy ? "default" : "pointer",
-        }}
+        className="report-link"
       >
         {busy ? "回報中…" : "回報資料過期／有誤"}
       </button>
       {error ? (
-        <span style={{ fontSize: 12, color: "#dc2626", marginLeft: 8 }}>
+        <span className="report-err">
           回報失敗，請稍後再試。
         </span>
       ) : null}

@@ -5,10 +5,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ["@jopojo/ai"],
+  transpilePackages: ["@jojopro/ai"],
   outputFileTracingRoot: path.join(__dirname, "../../"),
   webpack: (config) => {
-    config.resolve.alias["@jopojo/ai"] = path.join(
+    config.resolve.alias["@jojopro/ai"] = path.join(
       __dirname,
       "../../packages/ai/src/index.ts",
     );

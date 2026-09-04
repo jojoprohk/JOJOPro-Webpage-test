@@ -8,7 +8,7 @@ import type {
   VenueDraft,
   VenueDraftEntry,
   VenueDraftField,
-} from "@jopojo/ai";
+} from "@jojopro/ai";
 
 const areaTypes: AreaType[] = [
   "mall",
@@ -18,6 +18,7 @@ const areaTypes: AreaType[] = [
   "pop_up_event",
   "private_venue",
   "other",
+  "exhibition",
   "unknown",
 ];
 
@@ -45,6 +46,18 @@ function isBoolean(value: unknown): value is boolean {
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+// realVenuePhotoIndexes：附圖 index 陣列（0 起整數）。模型亂填就過濾走。
+function coercePhotoIndexes(value: unknown, photoCount: number): number[] {
+  if (!Array.isArray(value)) return [];
+  return Array.from(
+    new Set(
+      value
+        .filter((n): n is number => typeof n === "number" && Number.isInteger(n))
+        .filter((n) => n >= 0 && n < photoCount),
+    ),
+  );
 }
 
 // LLM 可能回傳唔屬於 VenueDraft 欄位名嘅字串，過濾成合法欄位 key。
@@ -248,6 +261,7 @@ export function createLlmVenueCompleter(): JsonCompleter {
   });
 
   return async ({ messages, images = [] }) => {
+    const photoCount = images.length;
     // Build vision-ready payload: the final user message gets image parts
     // attached so the model can OCR venue details from Telegram photos.
     const resolvedMessages: OpenAI.Chat.ChatCompletionMessageParam[] =
@@ -344,6 +358,10 @@ export function createLlmVenueCompleter(): JsonCompleter {
         unconfirmedFields: coerceFieldList(entry.unconfirmedFields),
         reviewNote: entry.reviewNote,
         isAgentListing: entry.isAgentListing === true,
+        realVenuePhotoIndexes:
+          photoCount > 0
+            ? coercePhotoIndexes((entry as { realVenuePhotoIndexes?: unknown }).realVenuePhotoIndexes, photoCount)
+            : [],
       })),
     };
   };

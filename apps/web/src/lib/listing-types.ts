@@ -40,6 +40,8 @@ export interface PublicListing {
 export interface ListingFilters {
   q: string;
   date: string | null; // YYYY-MM-DD
+  areaType: string | null; // 舖位類型（area_type），空字串/null = 不限
+  district: string | null; // 地區：18 區標準名，或 macro key（hong_kong_island/kowloon/new_territories）
   maxBudget: number | null;
   food: boolean;
   aircon: boolean;
