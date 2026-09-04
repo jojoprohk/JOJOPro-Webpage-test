@@ -1,7 +1,9 @@
 # JoPoJo 開發進度（單一交接文件）
 
-最後更新：2026-09-02
-狀態：Stage 1 — 收料 pipeline、審核頁（slice 3）同公開 listing 頁（slice 4）已完成；
+最後更新：2026-09-04（晚）
+狀態：Stage 1 — 收料 pipeline、審核頁（slice 3）、公開 listing 頁（slice 4）、
+18 區自動歸類＋審核頁相／內容自由編輯（slice 6）已完成（待跑一條 migration）；
+公開頁視覺打磨（ambient WebGL 背景＋全站圓角＋stock 相片系統＋展銷位新類型）已落地；
 IG／FB 草稿生成（slice 5）未做
 
 > 呢份文件係任何新對話／新 agent 接手時**第一份要讀**嘅檔。
@@ -24,7 +26,7 @@ npm run typecheck
 node server/build.mjs
 ```
 
-測試目前：78 個全綠（packages/ai 15、apps/web 63）。
+測試目前：94 個全綠（packages/ai 25、apps/web 69）。
 
 注意：本地 sandbox 若唔畀寫 `node_modules/.vite` 或 `*.tsbuildinfo`，
 用 `vitest run --no-cache` 同 `tsc --noEmit --incremental false` 即可，唔影響結果。
@@ -95,6 +97,40 @@ dev server 注意：Next.js 16 預設 Turbopack 同本專案 webpack alias 唔�
    初期人手貼，唔好做全自動發布。
 9. Instagram 連結處理打磨（photo OCR 同公開顯示相已做底）。
 
+10. **18 區自動歸類＋審核頁自由編輯（slice 6，2026-09-04 完成）**
+    - **地區**：`packages/ai/src/districts.ts` 提供 18 區標準清單＋地標／口語名推理
+      （`inferDistrict`／`normalizeDistrict`）。AI prompt 要求 `district` 必須係 18 區標準名；
+      parser／roster 統一：LLM/規則出自由文字（「葵涌」「旺角」）會自動正規化做標準區名
+      （「葵青區」「油尖旺區」），由場名／標題地標再兜底；推理唔到就 null 並標 low-confidence，
+      審核頁地區欄高亮。柴灣→東區、九龍灣→觀塘區等已知錯位已修正。
+    - **審核頁地區欄**：由自由輸入改做 18 區下拉（可留空＝未分區）。
+    - **每樓盤展示相**：`venue_drafts` 加 `photos jsonb`（見 migration 202609040001）。
+      元素 `{kind:"telegram",fileId}`（真實場地／IG 相）或 `{kind:"stock",src}`（類型代表相）。
+      AI 用 `realVenuePhotoIndexes` 標記邊幾張附圖係真實場地相（純文字海報截圖只 OCR、唔展示）；
+      冇真實相就按 `areaType` 自動配本地代表相（`apps/web/public/stock/*.svg`，7 張向量插畫，免版權）。
+      舊草稿 `photos` 為空時讀取自動 fallback 代表相，向後相容。
+    - **審核頁相編輯**：可逐張刪除、左右調位、加入 Telegram 原始相、加入／換類型代表相；
+      另加「儲存改動」掣（action `save`，只存唔改 status，唔使批准都可以先改）。
+    - 公開／審核出相改由 `photo-service` 按 `draft.photos` 分流：telegram→Telegram 下載、
+      stock→讀本地 `public/stock`。新 route：`/api/photos/draft/[id]/[index]`（審核，要登入）。
+11. **公開頁視覺打磨（slice 7，2026-09-04 晚）**
+    - 桃紅／淺粉紅 ambient WebGL 背景（`apps/web/src/app/components/site-background.tsx`）
+      - 兩層 fbm 雲各自 drift；速度 ×0.32 慢漂；零依賴
+      - `prefers-reduced-motion` 單格靜態；visibility hidden 時暫停
+      - 喺 `layout.tsx` fixed 喺 body 底，`.page-content` z-index 1
+    - 全站統一圓角尺度（CSS 變數喺 `:root`）：`--radius-sm: 8px` / `--radius: 12px` / `--radius-lg: 16px` / `--radius-pill: 999px`
+      - 場地卡同精選相簿改用獨立圓角框 + gap（原本共用邊框會出黑角）
+      - 按鈕、輸入框、篩選、提示框、審核卡、登入卡、tabs、彈窗、badge pill 全圓
+      - 場地卡 hover 浮起＋淡陰影
+    - Stock 相片系統（`packages/ai/src/stock-photos.ts` + `apps/web/public/stock/*.jpg`）
+      - 8 張 `.jpg`、1200×1200、150-230KB；之前嘅 7 個 `.svg` 已退役
+      - 審核頁「代表相」同公開 fallback 共用同一張
+    - 新增 `exhibition`（展銷位）areaType
+      - AI prompt、listing-filter 白名單、llm-venue-completer、stock-photos 表、
+        公開篩選下拉、featured-item 標籤、listing-card 標籤、審核 AREA_TYPES+AREA_LABELS、
+        草稿 STOCK_FILE 全部加咗
+
+
 ---
 
 ## 6. 啟用步驟（Mercy 一次性做）
@@ -103,6 +139,7 @@ dev server 注意：Next.js 16 預設 Turbopack 同本專案 webpack alias 唔�
    - `supabase/migrations/202609010001_drop_intake_unique.sql`（拆多場地唔再撞唯一約束）
    - `supabase/migrations/202609010002_review_rls.sql`（開 RLS）
    - `supabase/migrations/202609020001_add_report_count.sql`（slice 4 回報計數＋RPC）
+   - `supabase/migrations/202609040001_add_draft_photos.sql`（slice 6：每個樓盤自己嘅展示相列表 `photos jsonb`；additive，唔影響舊資料）
 2. **設密碼**：`openssl rand -hex 32` 產生一串，放入 `apps/web/.env.local`：
    `REVIEW_SECRET=<你產生嘅密碼>`（呢串就係登入密碼，可另改易記嘅，但唔好入 git）。
 3. **開網站**：`apps/web` 跑 `npm run dev`，瀏覽器開 `http://localhost:3000/review`，
@@ -120,6 +157,7 @@ dev server 注意：Next.js 16 預設 Turbopack 同本專案 webpack alias 唔�
 - 原始訊息、電話、API key、token、個人資料**唔入 git**；公開 listing 必須有來源同最後更新時間。
 - AI 唔可以靜默猜測；唔肯定就入 low-confidence，等 Mercy 審。
 - 改流程規則前，先改文件再改代碼。
+- 公開頁視覺（背景動畫、圖片）屬於品味決定，唔可以擅自換色／加無關裝飾；改前先同 Mercy 確認方向。
 
 ---
 
@@ -130,3 +168,16 @@ dev server 注意：Next.js 16 預設 Turbopack 同本專案 webpack alias 唔�
 - 補救：開新對話 → 俾 repo 路徑 → 叫佢先讀 `docs/PROGRESS.md`、`docs/specs/`、`git log`。
 - **每完成一塊就 git commit（只本地，唔 push）並更新本文件**，令進度唔依賴單一對話記憶。
 - 對話偏長時，agent 要主動提 Mercy 開新 thread 交接。
+
+---
+
+## 7. 開新 thread 交接 checklist
+
+1. 讀 `docs/PROGRESS.md`、`docs/PROJECT_STRUCTURE.md`、`git log --oneline -20`。
+2. 確認本地 dev server `http://localhost:3000/` 行緊（`lsof -nP -iTCP:3000 -sTCP:LISTEN`）；
+   唔係就喺 `apps/web` 跑 `npm run dev`，第一個用 3000 port，第二個會跳 3001。
+3. `.env.local` 入面有 `REVIEW_SECRET`、`TELEGRAM_BOT_TOKEN`、`TELEGRAM_ALLOWED_CHAT_IDS`；
+   **唔可以打印入面任何 token**。
+4. stock 相目錄：`apps/web/public/stock/`；新類型圖放 `/stock/<key>.jpg`（`key` = `STOCK_FILE` 嘅 value）。
+5. 測試：`npm run typecheck` + `npm test`，期望 94 個全綠。
+6. 自動化跑腳本如要 escalated，**唔好加 prefix_rule**（審核器 bug，會卡住）。

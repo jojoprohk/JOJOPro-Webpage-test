@@ -1,6 +1,6 @@
 # JoPoJo 項目結構規範
 
-最後更新：2026-08-23
+最後更新：2026-09-04
 
 ## 1. 項目目的
 
@@ -71,3 +71,10 @@ supabase/
 JoPoJo 最終唔只係一個舖位 listing 網站。長遠目標係成為以香港為基地、連接小本創業者、場地營運方、商場發展商同批發／供應鏈資源嘅實體零售空間流動平台。
 
 但所有大型功能、企業合作同跨境擴展，都要先通過早期驗證門檻，先可以投入資源。詳見 `docs/vision/long-term-vision.md`。
+
+## 8. 視覺與 stock 相片系統（2026-09-04）
+
+- 公開頁 ambient WebGL 背景：`apps/web/src/app/components/site-background.tsx`，純函數 GLSL fbm，零依賴；color palette 同 drift 參數直接喺 shader 入面。
+- 全站圓角尺度：CSS variables 喺 `apps/web/src/app/globals.css` 嘅 `:root`：`--radius-sm` / `--radius` / `--radius-lg` / `--radius-pill`。改呢度就等於改全站。
+- Stock 相片目錄：`apps/web/public/stock/`，副檔名統一 `.jpg`，檔名對應 `packages/ai/src/stock-photos.ts` 嘅 key（`mall` / `market` / `street` / `industrial` / `pop-up` / `private-venue` / `exhibition` / `hong-kong-shop`）。換圖時保持檔名同尺寸（1200×1200）就得，唔使改 code。
+- 舖位類型（areaType）統一喺 `packages/ai/src/types.ts`，改呢度要先睇 `docs/PROGRESS.md` §11。
