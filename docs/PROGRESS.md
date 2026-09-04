@@ -1,4 +1,4 @@
-# JoPoJo 開發進度（單一交接文件）
+# jojopro 開發進度（單一交接文件）
 
 最後更新：2026-09-04（晚）
 狀態：Stage 1 — 收料 pipeline、審核頁（slice 3）、公開 listing 頁（slice 4）、
@@ -7,7 +7,7 @@
 IG／FB 草稿生成（slice 5）未做
 
 > 呢份文件係任何新對話／新 agent 接手時**第一份要讀**嘅檔。
-> 配套規格：`docs/specs/2026-08-23-jopojo-ai-ops-mvp-design.md`、結構規範 `docs/PROJECT_STRUCTURE.md`、長遠方向 `docs/vision/long-term-vision.md`。
+> 配套規格：`docs/specs/2026-08-23-jojopro-ai-ops-mvp-design.md`、結構規範 `docs/PROJECT_STRUCTURE.md`、長遠方向 `docs/vision/long-term-vision.md`。
 
 ---
 

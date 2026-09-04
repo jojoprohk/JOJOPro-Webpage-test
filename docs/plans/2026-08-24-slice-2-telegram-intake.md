@@ -1,4 +1,4 @@
-# JoPoJo Slice 2：Telegram 收料、AI 解析同資料庫寫入
+# jojopro Slice 2：Telegram 收料、AI 解析同資料庫寫入
 
 日期：2026-08-24
 狀態：計劃中

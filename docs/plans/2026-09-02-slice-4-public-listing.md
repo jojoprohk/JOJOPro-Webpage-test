@@ -1,4 +1,4 @@
-# JoPoJo Slice 4：公開 Listing 頁（搜尋＋篩選＋聯絡＋回報過期）
+# jojopro Slice 4：公開 Listing 頁（搜尋＋篩選＋聯絡＋回報過期）
 
 日期：2026-09-02
 狀態：已完成（待 Mercy 跑 migration `202609020001_add_report_count.sql`，見 PROGRESS.md 第 6 節）

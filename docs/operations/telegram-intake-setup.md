@@ -101,7 +101,7 @@ LLM_MODEL=llama-3.3-70b-versatile
 
 1. 去 [Supabase Dashboard](https://supabase.com/dashboard)。
 2. 撳 `New project`。
-3. Project 名稱可以用 `jopojo`。
+3. Project 名稱可以用 `jojopro`。
 4. 設定資料庫密碼並自己保存。呢個密碼唔需要放入 `.env.local`。
 5. Region 揀 `Southeast Asia (Singapore)`。
 6. 等 project 建立完成。
@@ -168,7 +168,7 @@ PUBLIC_SITE_URL=http://localhost:3000
 
 ```bash
 npm install
-npm run dev --workspace=@jopojo/web
+npm run dev --workspace=@jojopro/web
 ```
 
 網站會喺 `http://localhost:3000` 啟動。

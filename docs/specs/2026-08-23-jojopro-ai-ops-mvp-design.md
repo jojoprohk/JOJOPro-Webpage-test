@@ -1,4 +1,4 @@
-# JoPoJo AI 營運系統 MVP 設計
+# jojopro AI 營運系統 MVP 設計
 
 日期：2026-08-23
 狀態：草稿，待 Mercy 審閱

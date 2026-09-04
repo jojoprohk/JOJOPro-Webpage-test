@@ -1,4 +1,4 @@
-# JoPoJo Slice 4.1：審核批量操作＋批准狀態＋圖片顯示
+# jojopro Slice 4.1：審核批量操作＋批准狀態＋圖片顯示
 
 日期：2026-09-02
 狀態：已完成（圖片代理要 dev server 用 webpack 跑；`npm run dev` 已改做 `next dev --webpack`）

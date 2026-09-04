@@ -1,4 +1,4 @@
-# JoPoJo Slice 1：收料模型同 AI Parser 實作計劃
+# jojopro Slice 1：收料模型同 AI Parser 實作計劃
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -45,7 +45,7 @@
 - Create: `packages/ai/tsconfig.json`
 
 **Produces:**
-- npm workspace `@jopojo/ai`
+- npm workspace `@jojopro/ai`
 - command `npm test`
 
 - [ ] Step 1: 建立 root `package.json`
@@ -60,7 +60,7 @@ Root `package.json`:
 
 ```json
 {
-  "name": "jopojo",
+  "name": "jojopro",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -113,7 +113,7 @@ PUBLIC_SITE_URL=http://localhost:3000
 
 ```json
 {
-  "name": "@jopojo/ai",
+  "name": "@jojopro/ai",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -153,7 +153,7 @@ PUBLIC_SITE_URL=http://localhost:3000
 - `ParseResult`
 
 - [ ] Step 1: Write `types.ts`
-- [ ] Step 2: Run `npm run typecheck --workspace=@jopojo/ai`
+- [ ] Step 2: Run `npm run typecheck --workspace=@jojopro/ai`
 - [ ] Step 3: Commit `feat: add venue parser types`
 
 Required exported types:

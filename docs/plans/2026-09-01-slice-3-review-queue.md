@@ -1,4 +1,4 @@
-# JoPoJo Slice 3：審核 Queue（Mercy 批准／修改／拒絕草稿）
+# jojopro Slice 3：審核 Queue（Mercy 批准／修改／拒絕草稿）
 
 日期：2026-09-01
 狀態：已完成（待 Mercy 跑 2 條 migration 同設 REVIEW_SECRET，見 PROGRESS.md 第 6 節）
