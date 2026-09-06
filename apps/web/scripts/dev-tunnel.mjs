@@ -153,7 +153,13 @@ async function setWebhookWithRetry(tunnelUrl) {
   log("❌ webhook 喺傳播窗口內仍未設好，稍後守護會再自動重試。");
 }
 
-const state = { webhookSet: false, currentUrl: null };
+const state = {
+  webhookSet: false,
+  currentUrl: null,
+  // Health probe：連續失敗次數（reset on 任何成功）。3 次失敗就 kill tunnel process，
+  // 觸發 child.on("exit") 自動 respawn。
+  healthFailures: 0,
+};
 
 // 保險機制：每 45 秒檢查一次。若 webhook 未設好、或指唔到現用 tunnel
 //（例如 DNS 遲過窗口先通、或 tunnel 靜默換咗網址），就自動補設。
@@ -172,6 +178,58 @@ setInterval(async () => {
     log(`⚠️  定期檢查 webhook 失敗：${err.message}`);
   }
 }, 45000).unref();
+
+// Health probe：每 60 秒透過公有 endpoint ping 一次本機 server。
+// 如果連續 3 次失敗（network error / 非 2xx / timeout），就 kill 當前 tunnel child，
+// 觸發 child.on("exit") → startTunnel 自動 respawn。
+const HEALTH_PROBE_INTERVAL_MS = 60000;
+const HEALTH_FAIL_THRESHOLD = 3;
+const HEALTH_TIMEOUT_MS = 8000;
+
+let tunnelChild = null;
+
+async function probeHealth() {
+  if (!state.currentUrl) return;
+  const url = `${state.currentUrl}/api/health`;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), HEALTH_TIMEOUT_MS);
+    try {
+      const res = await fetch(url, {
+        signal: controller.signal,
+        headers: { accept: "application/json" },
+      });
+      if (!res.ok) throw new Error(`status=${res.status}`);
+      // 確保係 JSON ok=true
+      const body = await res.json().catch(() => null);
+      if (!body || body.ok !== true) throw new Error("body not ok");
+      if (state.healthFailures > 0) {
+        log(`🟢 health probe 恢復（之前 ${state.healthFailures} 次失敗）`);
+      }
+      state.healthFailures = 0;
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch (err) {
+    state.healthFailures += 1;
+    log(
+      `⚠️  health probe 第 ${state.healthFailures}/${HEALTH_FAIL_THRESHOLD} 次失敗：${err.message}`,
+    );
+    if (state.healthFailures >= HEALTH_FAIL_THRESHOLD) {
+      log(
+        `❌ health probe 連續 ${HEALTH_FAIL_THRESHOLD} 次失敗，kill tunnel 強制 respawn…`,
+      );
+      state.healthFailures = 0;
+      if (tunnelChild && !tunnelChild.killed) {
+        tunnelChild.kill("SIGTERM");
+      }
+    }
+  }
+}
+
+setInterval(() => {
+  void probeHealth();
+}, HEALTH_PROBE_INTERVAL_MS).unref();
 
 function startTunnel() {
   state.webhookSet = false;
@@ -219,6 +277,7 @@ function startTunnel() {
     log("⛔ 啟動 cloudflared 出錯：", err.message);
   });
 
+  tunnelChild = child;
   return child;
 }
 
