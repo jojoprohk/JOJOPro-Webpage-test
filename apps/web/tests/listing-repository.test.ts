@@ -91,11 +91,12 @@ describe("mapRowToPublicListing", () => {
       priceAmountHkd: 800,
       allowsFood: true,
       reportCount: 3,
-      photoCount: 2,
       sourceLabel: "TG group",
     });
-    // 相數量由草稿 photos 計，唔再由 intake.photo_file_ids 計。
-    expect(dto.photoCount).toBe(2);
+    // 2 real 相 + 1 stock fallback (area_type "mall" 自動加) = 3
+    expect(dto.photoCount).toBe(3);
+    expect(dto.realPhotoCount).toBe(2);
+    expect(dto.stockPhotoCount).toBe(1);
     // 內部欄位唔可以喺公開 DTO 出現。
     expect(dto).not.toHaveProperty("raw_content");
     expect(dto).not.toHaveProperty("confidence_score");

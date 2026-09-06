@@ -5,8 +5,10 @@ import {
 } from "@jojopro/ai";
 
 // 由解析結果組出每個草稿嘅展示相：
-// AI 標記為「真實場地/IG 相」嘅附圖（用 index 對返 photoFileIds）排最前，
-// 其餘位置由場地類型 stock 相補上。純文字截圖唔入列表。
+// 1. AI 標記為「真實場地/IG 相」嘅附圖（用 index 對返 photoFileIds）排最前。
+// 2. 然後永遠加一張 stock 相做 category indicator（例如 Pop-up Store 顯示 pop-up 圖）。
+//    Stock 相會喺卡上自動標「僅供參考」。
+// 純文字截圖唔入列表；冇真實相就淨係 stock 相。
 export function buildEntryPhotos(
   areaType: AreaType,
   photoFileIds: string[],
@@ -17,10 +19,12 @@ export function buildEntryPhotos(
     .filter((fileId): fileId is string => !!fileId)
     .map((fileId) => ({ kind: "telegram" as const, fileId }));
 
+  // Stock 相永遠排最後做 category indicator。
+  const stock = stockPhotoForAreaType(areaType);
   if (telegramPhotos.length > 0) {
-    return telegramPhotos;
+    return [...telegramPhotos, stock];
   }
-  return [stockPhotoForAreaType(areaType)];
+  return [stock];
 }
 
 // 驗證由審核 API 傳入嘅 photos 欄位，只接受結構正確嘅 VenuePhoto[]。
