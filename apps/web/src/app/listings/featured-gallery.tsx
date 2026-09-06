@@ -9,6 +9,7 @@
 import { ArrowUpRight, X, MapPin, CalendarDays, Ruler } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { FeaturedItem } from "./featured-items.js";
+import { extractContactUrl } from "../../lib/listing-filter.js";
 
 export function FeaturedGallery({ items }: { items: FeaturedItem[] }) {
   const [activeId, setActiveId] = useState<string | null>(
@@ -115,9 +116,14 @@ export function FeaturedGallery({ items }: { items: FeaturedItem[] }) {
               <X />
             </button>
 
-            <div className="modal__media">
+            <div className={`modal__media${openItem.firstPhotoKind === "stock" ? " modal__media--reference" : ""}`}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={openItem.photo} alt={openItem.title} />
+              {openItem.firstPhotoKind === "stock" ? (
+                <span className="reference-badge" title="圖片僅供參考，並非真實場地">
+                  僅供參考
+                </span>
+              ) : null}
               {openItem.price ? <span className="modal__price">{openItem.price}</span> : null}
             </div>
 
@@ -148,11 +154,20 @@ export function FeaturedGallery({ items }: { items: FeaturedItem[] }) {
                   <a className="btn btn--whatsapp" href={openItem.whatsapp} target="_blank" rel="noopener noreferrer">
                     WhatsApp 聯絡
                   </a>
-                ) : openItem.contactText ? (
-                  <span className="contact-text">聯絡：{openItem.contactText}</span>
-                ) : (
-                  <span className="contact-none">聯絡方法待確認</span>
-                )}
+                ) : (() => {
+                  const url = extractContactUrl(openItem.contactText);
+                  if (url && openItem.contactText) {
+                    return (
+                      <a className="contact-link" href={url} target="_blank" rel="noopener noreferrer">
+                        聯絡：{openItem.contactText}
+                      </a>
+                    );
+                  }
+                  if (openItem.contactText) {
+                    return <span className="contact-text">聯絡：{openItem.contactText}</span>;
+                  }
+                  return <span className="contact-none">聯絡方法待確認</span>;
+                })()}
                 {openItem.href ? (
                   <a className="modal__source" href={openItem.href} target="_blank" rel="noopener noreferrer">
                     原始貼文（{openItem.sourceLabel}）

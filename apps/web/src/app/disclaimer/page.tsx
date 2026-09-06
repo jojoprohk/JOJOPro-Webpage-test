@@ -15,9 +15,11 @@ export default function DisclaimerPage() {
     <>
       <header className="site-header">
         <div className="site-header__inner">
-          <a href="/" className="brand" aria-label="JoJoPro 首頁">
+          <a href="/" className="brand" aria-label="JoJoPro 租租舖 首頁">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/jojopro-logo.png" alt="JoJoPro" className="brand-logo" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/jojopro-logo-cn.png" alt="租租舖" className="brand-logo-cn" />
           </a>
           <a href="/" className="review-home">
             <ArrowLeft />
@@ -121,6 +123,29 @@ export default function DisclaimerPage() {
             返主頁瀏覽場地
           </a>
         </p>
+
+        <section className="legal-section">
+          <h2>字體來源</h2>
+          <p>
+            本站採用{" "}
+            <a
+              href="https://fonts.google.com/noto/specimen/Noto+Sans+JP"
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              Noto Sans JP
+            </a>
+            （SIL Open Font License 1.1）為主要字體，繁體中文部分由{" "}
+            <a
+              href="https://fonts.google.com/noto/specimen/Noto+Sans+TC"
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              Noto Sans TC
+            </a>
+            （SIL Open Font License 1.1）接力。
+          </p>
+        </section>
 
         <SiteFooter />
       </main>

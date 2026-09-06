@@ -161,13 +161,13 @@ export function matchesFilters(
   filters: ListingFilters,
   today: string,
 ): boolean {
-  // 揀咗特定日期：只顯示當日有檔（唔再另外套用隱藏過期）。
-  if (filters.date) {
-    if (!isAvailableOn(listing, filters.date)) {
-      return false;
-    }
-  } else if (isExpired(listing, today)) {
-    // 預設隱藏完全過期嘅場地。
+  // 揀咗特定日期：只顯示當日有檔；過期與否唔影響（已過期但當日有檔屬邏輯矛盾，跳過）。
+  if (filters.date && !isAvailableOn(listing, filters.date)) {
+    return false;
+  }
+
+  // 過期場地直接隱藏，唔顯示。
+  if (isExpired(listing, today)) {
     return false;
   }
 
@@ -292,6 +292,24 @@ export function parseFilters(
     aircon: isTruthyFlag(first("aircon")),
     deal: isTruthyFlag(first("deal")),
   };
+}
+
+// 由 contactText 內抽取第一個 URL。
+// 支援：https?://、wa.me/、t.me/、instagram.com/...、bit.ly/...。
+// 用最簡單 regex：URL 連續字元直到空白／句號／行尾。
+// 如果 contactText 本身係 URL 就 extract 返出嚟做 link 嘅 href；
+// 但 link 嘅顯示文字仍然用原 contactText（包含「IG: @xxx」等 context）。
+const CONTACT_URL_RE = /\b((?:https?:\/\/[\w.-]+|wa\.me\/[\w-]+|t\.me\/[\w-]+|[\w-]+\.(?:com|hk|org|io|me|co))(?:\/[\w\-./?=&%#]*)?)/i;
+
+export function extractContactUrl(text: string | null): string | null {
+  if (!text) return null;
+  const m = text.match(CONTACT_URL_RE);
+  if (!m) return null;
+  const url = m[1];
+  if (url === undefined) return null;
+  // 自動補 https:// 如果係 wa.me / t.me / domain-only
+  if (/^https?:\/\//i.test(url)) return url;
+  return `https://${url}`;
 }
 
 // 將資料庫入面可能嘅 WhatsApp 聯絡寫法，正規化做可點擊連結。

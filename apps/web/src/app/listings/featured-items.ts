@@ -25,6 +25,8 @@ export interface FeaturedItem {
   contactText: string | null;
   sourceLabel: string;
   updated: string;
+  /** 第一張相係真實場地相定 stock 代表相。Stock 必須標明。 */
+  firstPhotoKind: "real" | "stock" | "none";
 }
 
 const AREA_TYPE_LABELS: Record<string, string> = {
@@ -77,5 +79,6 @@ export function toFeaturedItems(listings: PublicListing[], limit = 5): FeaturedI
     contactText: l.contactText,
     sourceLabel: l.sourceLabel,
     updated: formatUpdatedAt(l.lastReviewedAt),
+    firstPhotoKind: l.firstPhotoKind,
   }));
 }

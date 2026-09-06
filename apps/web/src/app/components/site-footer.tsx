@@ -12,7 +12,7 @@ export function SiteFooter() {
       <p className="site-footer__links">
         <a href="/disclaimer">完整免責條款</a>
         <span aria-hidden="true">·</span>
-        <span>© {new Date().getFullYear()} JoJoPro</span>
+        <span>© {new Date().getFullYear()} JoJoPro 租租舖</span>
       </p>
     </footer>
   );

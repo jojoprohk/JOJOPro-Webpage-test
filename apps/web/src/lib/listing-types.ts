@@ -35,6 +35,12 @@ export interface PublicListing {
   reportCount: number;
   photoCount: number;
   createdAt: string;
+  /** 真實場地相（用戶上傳）數量。 */
+  realPhotoCount: number;
+  /** Stock 代表相（按 area_type 自動配）數量。 */
+  stockPhotoCount: number;
+  /** 展示用嘅第一張相屬於邊一種——Stock 相必須標明「僅供參考」。 */
+  firstPhotoKind: "real" | "stock" | "none";
 }
 
 export interface ListingFilters {

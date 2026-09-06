@@ -12,7 +12,7 @@ import {
   ImageOff,
 } from "lucide-react";
 import type { PublicListing } from "../../lib/listing-types.js";
-import { formatDateLabel, normalizeWhatsappLink } from "../../lib/listing-filter.js";
+import { extractContactUrl, formatDateLabel, normalizeWhatsappLink } from "../../lib/listing-filter.js";
 import { ReportButton } from "./report-button.js";
 
 const AREA_TYPE_LABELS: Record<string, string> = {
@@ -54,9 +54,14 @@ export function ListingCard({ listing }: { listing: PublicListing }) {
   return (
     <article className="card listing-card">
       {listing.photoCount > 0 ? (
-        <a className="photo" href={`${photoBase}/0`} target="_blank" rel="noopener noreferrer">
+        <a className={`photo${listing.firstPhotoKind === "stock" ? " photo--reference" : ""}`} href={`${photoBase}/0`} target="_blank" rel="noopener noreferrer">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={`${photoBase}/0`} alt={listing.title} loading="lazy" />
+          {listing.firstPhotoKind === "stock" ? (
+            <span className="reference-badge" title="圖片僅供參考，並非真實場地">
+              僅供參考
+            </span>
+          ) : null}
           {listing.priceText ? <span className="price-tag">{listing.priceText}</span> : null}
         </a>
       ) : (
@@ -143,11 +148,27 @@ export function ListingCard({ listing }: { listing: PublicListing }) {
           >
             WhatsApp 聯絡
           </a>
-        ) : listing.contactText ? (
-          <span className="contact-text">聯絡：{listing.contactText}</span>
-        ) : (
-          <span className="contact-none">聯絡方法待確認</span>
-        )}
+        ) : (() => {
+          const contactUrl = extractContactUrl(listing.contactText);
+          if (contactUrl && listing.contactText) {
+            return (
+              <a
+                className="contact-link"
+                href={contactUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                聯絡：{listing.contactText}
+              </a>
+            );
+          }
+          if (listing.contactText) {
+            return (
+              <span className="contact-text">聯絡：{listing.contactText}</span>
+            );
+          }
+          return <span className="contact-none">聯絡方法待確認</span>;
+        })()}
       </div>
     </article>
   );

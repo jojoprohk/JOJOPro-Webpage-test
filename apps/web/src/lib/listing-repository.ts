@@ -71,10 +71,29 @@ export function mapRowToPublicListing(row: ApprovedListingRow): PublicListing {
     sourceUrl: row.intake?.source_url ?? null,
     lastReviewedAt: row.last_reviewed_at,
     reportCount: row.report_count ?? 0,
-    // 相數量由草稿自己嘅展示相列表計（冇真實相時 fallback 一張 stock 代表相，
-    // 所以每個 listing 至少有 1 張）。唔暴露 intake id 或 file_id。
-    photoCount: resolveVenuePhotos(row.photos, (row.area_type as AreaType) ?? "unknown").length,
     createdAt: row.created_at,
+    // ...photo metadata 從 resolveVenuePhotos 計
+    ...(() => {
+      const photos = resolveVenuePhotos(
+        row.photos,
+        (row.area_type as AreaType) ?? "unknown",
+      );
+      const realPhotoCount = photos.filter((p) => p.kind === "telegram").length;
+      const stockPhotoCount = photos.filter((p) => p.kind === "stock").length;
+      const first = photos[0];
+      const firstPhotoKind: "real" | "stock" | "none" =
+        first === undefined
+          ? "none"
+          : first.kind === "telegram"
+            ? "real"
+            : "stock";
+      return {
+        photoCount: photos.length,
+        realPhotoCount,
+        stockPhotoCount,
+        firstPhotoKind,
+      };
+    })(),
   };
 }
 

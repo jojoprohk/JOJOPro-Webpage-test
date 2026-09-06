@@ -73,10 +73,14 @@ describe("mapRowToPublicListing", () => {
       is_urgent: false,
       is_discounted: false,
       summary: "",
+      photos: [
+        { kind: "telegram", fileId: "a" },
+        { kind: "telegram", fileId: "b" },
+      ],
       report_count: 3,
       last_reviewed_at: "2026-09-01T00:00:00.000Z",
       created_at: "2026-09-01T00:00:00.000Z",
-      intake: { source_label: "TG group", source_url: null, photo_file_ids: ["a", "b"] },
+      intake: { source_label: "TG group", source_url: null },
     });
     expect(dto).toMatchObject({
       id: "x",
@@ -90,6 +94,8 @@ describe("mapRowToPublicListing", () => {
       photoCount: 2,
       sourceLabel: "TG group",
     });
+    // 相數量由草稿 photos 計，唔再由 intake.photo_file_ids 計。
+    expect(dto.photoCount).toBe(2);
     // 內部欄位唔可以喺公開 DTO 出現。
     expect(dto).not.toHaveProperty("raw_content");
     expect(dto).not.toHaveProperty("confidence_score");
@@ -125,6 +131,7 @@ describe("mapRowToPublicListing", () => {
       is_urgent: false,
       is_discounted: false,
       summary: "",
+      photos: null,
       report_count: null,
       last_reviewed_at: null,
       created_at: "2026-09-01T00:00:00.000Z",
@@ -134,6 +141,8 @@ describe("mapRowToPublicListing", () => {
     expect(dto.sourceUrl).toBeNull();
     expect(dto.reportCount).toBe(0);
     expect(dto.sessionDates).toEqual([]);
+    // 冇 photos 時 fallback 一張場地類型代表相，所以公開頁至少 1 張。
+    expect(dto.photoCount).toBe(1);
   });
 });
 
@@ -147,8 +156,9 @@ describe("listApprovedListings", () => {
 
     expect(supabase.from).toHaveBeenCalledWith("venue_drafts");
     expect(calls.selectQuery).toContain(
-      "intake:intake_items(source_label, source_url, photo_file_ids)",
+      "intake:intake_items(source_label, source_url)",
     );
+    expect(calls.selectQuery).toContain("photos");
     expect(selectChain.eq).toHaveBeenCalledWith("status", "approved");
     expect(result).toEqual([]);
   });
@@ -195,5 +205,85 @@ describe("reportListing", () => {
     await expect(
       repo.reportListing("x", "2026-09-02T00:00:00.000Z"),
     ).rejects.toThrow("rpc down");
+  });
+});
+
+
+describe("mapRowToPublicListing photo breakdown", () => {
+  it("全部 stock 相 → firstPhotoKind = 'stock'", () => {
+    const dto = mapRowToPublicListing({
+      id: "x",
+      title: "t",
+      district: null,
+      venue_name: null,
+      area_type: "mall",
+      photos: null, // 冇真實相 → fallback stock
+      start_date: null,
+      end_date: null,
+      session_dates: null,
+      price_text: null,
+      price_amount_hkd: null,
+      price_unit: "unknown",
+      booth_size_text: null,
+      contact_text: null,
+      contact_whatsapp_link: null,
+      has_aircon: null,
+      is_prime_spot: false,
+      is_cart_spot: false,
+      allows_food: null,
+      allows_dry_goods: null,
+      allows_beauty: null,
+      allows_service: null,
+      requires_product_approval: false,
+      is_urgent: false,
+      is_discounted: false,
+      summary: "",
+      report_count: 0,
+      last_reviewed_at: null,
+      created_at: "2026-09-01T00:00:00.000Z",
+      intake: null,
+    });
+    expect(dto.firstPhotoKind).toBe("stock");
+    expect(dto.stockPhotoCount).toBeGreaterThan(0);
+    expect(dto.realPhotoCount).toBe(0);
+  });
+
+  it("有 telegram 相 → firstPhotoKind = 'real'", () => {
+    const dto = mapRowToPublicListing({
+      id: "x",
+      title: "t",
+      district: null,
+      venue_name: null,
+      area_type: "mall",
+      photos: [{ kind: "telegram", fileId: "abc" }, { kind: "stock", src: "/stock/mall.svg" }],
+      start_date: null,
+      end_date: null,
+      session_dates: null,
+      price_text: null,
+      price_amount_hkd: null,
+      price_unit: "unknown",
+      booth_size_text: null,
+      contact_text: null,
+      contact_whatsapp_link: null,
+      has_aircon: null,
+      is_prime_spot: false,
+      is_cart_spot: false,
+      allows_food: null,
+      allows_dry_goods: null,
+      allows_beauty: null,
+      allows_service: null,
+      requires_product_approval: false,
+      is_urgent: false,
+      is_discounted: false,
+      summary: "",
+      report_count: 0,
+      last_reviewed_at: null,
+      created_at: "2026-09-01T00:00:00.000Z",
+      intake: null,
+    });
+    expect(dto.firstPhotoKind).toBe("real");
+    expect(dto.realPhotoCount).toBe(1);
+    expect(dto.stockPhotoCount).toBe(1);
+    expect(dto.photoCount).toBe(2);
   });
 });

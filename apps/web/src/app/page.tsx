@@ -6,6 +6,7 @@ import { toFeaturedItems } from "./listings/featured-items.js";
 import { HeroIntro, Reveal, RevealGrid } from "./components/motion.js";
 import { SiteFooter } from "./components/site-footer.js";
 import { applyFilters, parseFilters, todayInHongKong } from "../lib/listing-filter.js";
+import { pickFeatured } from "../lib/featured-ranking.js";
 import { createListingRepository } from "../lib/listing-repository.js";
 import { createSupabaseServiceClient } from "../lib/venue-repository.js";
 import type { PublicListing } from "../lib/listing-types.js";
@@ -32,27 +33,18 @@ export default async function HomePage({
     loadFailed = true;
   }
 
-  // 精選：有相、最新嘅頭 5 個場地，只喺無篩選嘅首頁顯示。
-  const isFiltered =
-    filters.q !== "" ||
-    filters.date !== null ||
-    filters.areaType !== null ||
-    filters.district !== null;
-  const featured = isFiltered
-    ? []
-    : toFeaturedItems(
-        approved
-          .filter((l) => l.photoCount > 0)
-          .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
-      );
+  // 精選：固定置頂（唔受篩選影響），按資料完整度 + 平貴 + 吸引力計分。
+  const featured = toFeaturedItems(pickFeatured(approved, todayInHongKong(), 6));
 
   return (
     <>
       <header className="site-header">
         <div className="site-header__inner">
-          <a href="/" className="brand" aria-label="JoJoPro 首頁">
+          <a href="/" className="brand" aria-label="JoJoPro 租租舖 首頁">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/jojopro-logo.png" alt="JoJoPro" className="brand-logo" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/jojopro-logo-cn.png" alt="租租舖" className="brand-logo-cn" />
           </a>
           <span className="header-meta">
             <MapPinned />

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyFilters,
   compareListings,
+  extractContactUrl,
   formatDateLabel,
   isAvailableOn,
   isExpired,
@@ -45,6 +46,9 @@ function makeListing(overrides: Partial<PublicListing> = {}): PublicListing {
     reportCount: 0,
     photoCount: 0,
     createdAt: "2026-09-01T00:00:00.000Z",
+    realPhotoCount: 0,
+    stockPhotoCount: 0,
+    firstPhotoKind: "none",
     ...overrides,
   };
 }
@@ -52,6 +56,8 @@ function makeListing(overrides: Partial<PublicListing> = {}): PublicListing {
 const NO_FILTERS: ListingFilters = {
   q: "",
   date: null,
+  areaType: null,
+  district: null,
   maxBudget: null,
   food: false,
   aircon: false,
@@ -136,6 +142,58 @@ describe("matchesFilters", () => {
     ).toBe(true);
     expect(
       matchesFilters(makeListing(), { ...NO_FILTERS, q: "銅鑼灣" }, TODAY),
+    ).toBe(false);
+  });
+
+  it("地區用標準 18 區名時，口語搜尋都搵到（旺角→油尖旺區）", () => {
+    const listing = makeListing({ district: "油尖旺區", title: "朗豪坊場", venueName: "朗豪坊" });
+    expect(matchesFilters(listing, { ...NO_FILTERS, q: "旺角" }, TODAY)).toBe(true);
+    expect(matchesFilters(listing, { ...NO_FILTERS, q: "油尖旺" }, TODAY)).toBe(true);
+    expect(matchesFilters(listing, { ...NO_FILTERS, q: "油尖旺區" }, TODAY)).toBe(true);
+  });
+
+  it("大區統稱：九龍對到九龍五區、港島對到港島四區、新界對到新界九區", () => {
+    const mk = makeListing({ district: "油尖旺區", title: "旺角場" });
+    const ssp = makeListing({ district: "深水埗區", title: "深水埗場" });
+    const tm = makeListing({ district: "屯門區", title: "屯門場" });
+    const central = makeListing({ district: "中西區", title: "中環場" });
+    // 打「九龍」或「九龍區」都要對到九龍五區。
+    for (const q of ["九龍", "九龍區"]) {
+      expect(matchesFilters(mk, { ...NO_FILTERS, q }, TODAY)).toBe(true);
+      expect(matchesFilters(ssp, { ...NO_FILTERS, q }, TODAY)).toBe(true);
+      expect(matchesFilters(tm, { ...NO_FILTERS, q }, TODAY)).toBe(false);
+      expect(matchesFilters(central, { ...NO_FILTERS, q }, TODAY)).toBe(false);
+    }
+    // 打「新界」對到屯門（新界），唔對九龍／港島。
+    expect(matchesFilters(tm, { ...NO_FILTERS, q: "新界" }, TODAY)).toBe(true);
+    expect(matchesFilters(mk, { ...NO_FILTERS, q: "新界" }, TODAY)).toBe(false);
+    // 打「港島」對到中環（中西區）。
+    expect(matchesFilters(central, { ...NO_FILTERS, q: "港島" }, TODAY)).toBe(true);
+    expect(matchesFilters(mk, { ...NO_FILTERS, q: "港島" }, TODAY)).toBe(false);
+  });
+
+  it("下拉篩選：舖位類型同地區（含大區）", () => {
+    const mkMarket = makeListing({ district: "油尖旺區", areaType: "market" });
+    const tmMall = makeListing({ district: "屯門區", areaType: "mall" });
+
+    // 類型篩選：只留 market。
+    expect(matchesFilters(mkMarket, { ...NO_FILTERS, areaType: "market" }, TODAY)).toBe(true);
+    expect(matchesFilters(tmMall, { ...NO_FILTERS, areaType: "market" }, TODAY)).toBe(false);
+
+    // 地區下拉選單一區。
+    expect(matchesFilters(mkMarket, { ...NO_FILTERS, district: "油尖旺區" }, TODAY)).toBe(true);
+    expect(matchesFilters(tmMall, { ...NO_FILTERS, district: "油尖旺區" }, TODAY)).toBe(false);
+
+    // 地區下拉選「九龍（全區）」→ 油尖旺中、屯門唔中。
+    expect(matchesFilters(mkMarket, { ...NO_FILTERS, district: "kowloon" }, TODAY)).toBe(true);
+    expect(matchesFilters(tmMall, { ...NO_FILTERS, district: "kowloon" }, TODAY)).toBe(false);
+
+    // 類型＋地區一齊用。
+    expect(
+      matchesFilters(mkMarket, { ...NO_FILTERS, areaType: "market", district: "kowloon" }, TODAY),
+    ).toBe(true);
+    expect(
+      matchesFilters(tmMall, { ...NO_FILTERS, areaType: "market", district: "kowloon" }, TODAY),
     ).toBe(false);
   });
 
@@ -305,5 +363,41 @@ describe("todayInHongKong", () => {
     expect(todayInHongKong(new Date("2026-09-02T23:30:00.000Z"))).toBe(
       "2026-09-03",
     );
+  });
+});
+
+
+describe("extractContactUrl", () => {
+  it("null / 空字 = null", () => {
+    expect(extractContactUrl(null)).toBeNull();
+    expect(extractContactUrl("")).toBeNull();
+  });
+
+  it("https URL", () => {
+    expect(extractContactUrl("https://instagram.com/abc")).toBe(
+      "https://instagram.com/abc",
+    );
+    expect(extractContactUrl("https://wa.me/85212345678")).toBe(
+      "https://wa.me/85212345678",
+    );
+  });
+
+  it("wa.me / t.me 自動補 https://", () => {
+    expect(extractContactUrl("wa.me/85212345678")).toBe(
+      "https://wa.me/85212345678",
+    );
+    expect(extractContactUrl("t.me/abc")).toBe("https://t.me/abc");
+  });
+
+  it("context 前綴（IG: @xxx）入面有 URL 抽得到", () => {
+    expect(extractContactUrl("IG: @reu_funfest")).toBeNull();
+    expect(extractContactUrl("IG: @reu_funfest https://instagram.com/reu_funfest")).toBe(
+      "https://instagram.com/reu_funfest",
+    );
+  });
+
+  it("純文字 username = null", () => {
+    expect(extractContactUrl("IG: @abc")).toBeNull();
+    expect(extractContactUrl("請致電 12345678")).toBeNull();
   });
 });
