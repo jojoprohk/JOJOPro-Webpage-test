@@ -49,6 +49,9 @@ function makeListing(overrides: Partial<PublicListing> = {}): PublicListing {
     realPhotoCount: 0,
     stockPhotoCount: 0,
     firstPhotoKind: "none",
+    isFeatured: false,
+    featuredAt: null,
+    isLinkReit: false,
     ...overrides,
   };
 }
@@ -62,6 +65,7 @@ const NO_FILTERS: ListingFilters = {
   food: false,
   aircon: false,
   deal: false,
+  linkReit: false,
 };
 
 const TODAY = "2026-09-02";
@@ -241,6 +245,27 @@ describe("matchesFilters", () => {
       matchesFilters(makeListing({ isDiscounted: true }), { ...NO_FILTERS, deal: true }, TODAY),
     ).toBe(true);
   });
+
+  it("只睇領展場地：isLinkReit=false 嘅場地會被排除", () => {
+    expect(
+      matchesFilters(makeListing({ isLinkReit: false }), { ...NO_FILTERS, linkReit: true }, TODAY),
+    ).toBe(false);
+  });
+
+  it("只睇領展場地：isLinkReit=true 嘅場地會被保留", () => {
+    expect(
+      matchesFilters(makeListing({ isLinkReit: true }), { ...NO_FILTERS, linkReit: true }, TODAY),
+    ).toBe(true);
+  });
+
+  it("唔剔 linkReit：所有場地都會被保留", () => {
+    expect(
+      matchesFilters(makeListing({ isLinkReit: false }), { ...NO_FILTERS, linkReit: false }, TODAY),
+    ).toBe(true);
+    expect(
+      matchesFilters(makeListing({ isLinkReit: true }), { ...NO_FILTERS, linkReit: false }, TODAY),
+    ).toBe(true);
+  });
 });
 
 describe("compareListings / applyFilters", () => {
@@ -280,6 +305,7 @@ describe("parseFilters", () => {
       food: "1",
       aircon: "on",
       deal: "true",
+      linkReit: "1",
     });
     expect(f.q).toBe("旺角");
     expect(f.date).toBe("2026-09-10");
@@ -287,6 +313,11 @@ describe("parseFilters", () => {
     expect(f.food).toBe(true);
     expect(f.aircon).toBe(true);
     expect(f.deal).toBe(true);
+    expect(f.linkReit).toBe(true);
+  });
+
+  it("缺省 linkReit 為 false", () => {
+    expect(parseFilters({}).linkReit).toBe(false);
   });
 
   it("非法日期同預算變 null / 0", () => {

@@ -181,3 +181,85 @@ dev server 注意：Next.js 16 預設 Turbopack 同本專案 webpack alias 唔�
 4. stock 相目錄：`apps/web/public/stock/`；新類型圖放 `/stock/<key>.jpg`（`key` = `STOCK_FILE` 嘅 value）。
 5. 測試：`npm run typecheck` + `npm test`，期望 94 個全綠。
 6. 自動化跑腳本如要 escalated，**唔好加 prefix_rule**（審核器 bug，會卡住）。
+
+
+## 12. Phase 4 設計打磨（2026-09-04，已取消中秋 seasonal 部署）
+
+文件先行，spec 喺 `docs/specs/2026-09-04-design-phase-4-typography-and-mid-autumn.md`。
+
+- **Typography** — 源柔ゴシック（next/font/local，3 個 .woff2）做主字體，
+  Noto Sans TC（next/font/google）做繁中 fallback；typography scale 由 ad-hoc
+  font-size 改成 `:root` 嘅 `--text-xs` ... `--text-display` CSS 變數。
+- **Mid-Autumn Mood** — 兩隻 inline SVG 元素（飄浮兔仔燈籠 + 望月白兔），
+  `MID_AUTUMN_2026` flag 控制 2026-09-04 至 2026-09-27 HK time 開窗；
+  過咗 9/27 自動 unmount。位置 fixed 右上／右下，layer 喺 SiteBackground 之上、
+  page-content 之下，pointer-events: none。prefers-reduced-motion 自動關動畫。
+- **檔案結構**：
+  - `apps/web/src/lib/seasonal.ts`（feature flag + 日期判定）
+  - `apps/web/src/app/components/seasonal-decorations.tsx`（容器）
+  - `apps/web/src/app/components/floating-rabbit-lantern.tsx`
+  - `apps/web/src/app/components/moon-gazing-rabbit.tsx`
+  - `apps/web/src/app/fonts/*.woff2`（字體）
+  - `apps/web/tests/seasonal.test.ts`（日期視窗 unit test）
+- **唔做**：新 route、新 npm 依賴、改 SiteBackground、listing DTO、review page 視覺。
+
+> 2026-09-07 取消：中秋 mood 嘅 SVG / PNG / lib / CSS / test 全部移除。Typography（Noto Sans JP + Noto Sans TC fallback + scale vars + preload: false）保留，屬於永久字體決定。Spec doc `docs/specs/2026-09-04-design-phase-4-typography-and-mid-autumn.md`保留作為歷史記錄（唔再 active deploy）。
+
+---
+
+## 更新：2026-09-09 — Link REIT filter 完整 fix
+
+最後更新：2026-09-09（凌晨）
+狀態：**Link REIT filter 由「完全冇效」變成「server-side 正常運作」**。
+
+### 根因（第一性原理）
+
+`matchesFilters()` 喺 `apps/web/src/lib/listing-filter.ts` 雖然有收到 `filters.linkReit`（UI + parseFilters 都 OK），但**漏寫咗實際嘅 boolean check**：
+
+```ts
+// 之前：filter 喺 URL 收到 linkReit=1，但 matchesFilters 完全冇用呢個值
+// 之後（加咗呢段）：
+if (filters.linkReit && listing.isLinkReit !== true) {
+  return false;
+}
+```
+
+之前所有「search 領展 出現非領展場地」嘅症狀都係因為呢度。
+Dev server 嘅 stale compiled output 係次要問題（已 .next cache 清過），唔係 root cause。
+
+### 修正內容
+
+1. **Code fix** — `apps/web/src/lib/listing-filter.ts`：
+   - `matchesFilters()` 加 `filters.linkReit && listing.isLinkReit !== true` check
+2. **Test 新增 3 條** — `apps/web/tests/listing-filter.test.ts`：
+   - 只睇領展：isLinkReit=false → 排除
+   - 只睇領展：isLinkReit=true → 保留
+   - 唔剔 linkReit：所有場地都保留
+   - 加埋 `parseFilters` 嘅 linkReit 解析測試
+3. **Data fix** — Supabase REST PATCH：
+   - 12 個 venue 名（共 15 條 entry）由 `is_link_reit=false` 改為 `true`：
+     - 樂富B、樂富B
+     - 太和、太和廣場
+     - 蝴蝶、蝴蝶C、蝴蝶廣場
+     - 安蔭商場
+     - 新翠商場
+     - 富東 A、富東 B
+     - 顯徑 A
+     - 鯉魚門 C1、鯉魚門 C2、鯉魚門廣場
+   - 全屬 Link REIT HOS portfolio（公屋範圍內嘅領展商場）
+4. **驗證結果**：
+   - 122/122 tests pass（+4 新 linkReit test）
+   - TypeScript clean
+   - Dev server (`?linkReit=1`)：
+     - 之前：154 cards（filter 冇效）
+     - 而家：97 cards（全部係 Link REIT HOS）
+   - 反向驗證：`大本型`、`美孚`、`利東街`、`紅磡廣場` 剔咗 linkReit 後**完全唔顯示** ✅
+
+### DB counts（修補後）
+- is_link_reit=true：**98 條**（之前 83）
+- is_link_reit=false：**62 條**（之前 77）
+
+### 預防措施
+- linkReit filter 邏輯已有 4 條 unit test 覆蓋（filter 行為 + URL parsing）
+- DB tagging 仍係人手 review；下次再發現唔啱可以 update 同一條 PATCH script
+

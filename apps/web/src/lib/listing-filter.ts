@@ -205,6 +205,11 @@ export function matchesFilters(
     return false;
   }
 
+  // 領展場地 filter：剔咗就只顯示 isLinkReit=true 嘅場地。
+  if (filters.linkReit && listing.isLinkReit !== true) {
+    return false;
+  }
+
   return true;
 }
 
@@ -291,6 +296,7 @@ export function parseFilters(
     food: isTruthyFlag(first("food")),
     aircon: isTruthyFlag(first("aircon")),
     deal: isTruthyFlag(first("deal")),
+    linkReit: isTruthyFlag(first("linkReit")),
   };
 }
 
