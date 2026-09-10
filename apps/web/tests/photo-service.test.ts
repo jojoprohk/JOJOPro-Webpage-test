@@ -6,6 +6,7 @@ function createFakeSupabase(opts: {
   draft?: unknown;
   intake?: unknown;
 }) {
+  const downloads: Array<{ bucket: string; key: string }> = [];
   function chain(row: unknown) {
     return {
       select: vi.fn(function (this: unknown) {
@@ -17,12 +18,26 @@ function createFakeSupabase(opts: {
       maybeSingle: vi.fn(() => Promise.resolve({ data: row, error: null })),
     };
   }
+  const storage = {
+    from: vi.fn((bucket: string) => ({
+      download: vi.fn(async (key: string) => {
+        downloads.push({ bucket, key });
+        return {
+          data: new Blob([new Uint8Array([1, 2, 3, 4])], {
+            type: "image/jpeg",
+          }),
+          error: null,
+        };
+      }),
+    })),
+  };
   const supabase = {
     from: vi.fn((table: string) =>
       chain(table === "venue_drafts" ? opts.draft : opts.intake),
     ),
+    storage,
   };
-  return { supabase };
+  return { supabase, downloads };
 }
 
 describe("getIntakePhoto", () => {
@@ -62,13 +77,31 @@ describe("getListingPhoto", () => {
     ).rejects.toMatchObject({ code: "not_found" });
   });
 
-  it("approved draft 先會去攞 intake 相", async () => {
+  it("approved draft 嘅 telegram 相，冇 bot token → no_bot_token（證實通過咗 approved 檢查）", async () => {
     const { supabase } = createFakeSupabase({
-      draft: { id: ID, status: "approved", intake_item_id: null },
+      draft: {
+        id: ID,
+        status: "approved",
+        area_type: "market",
+        photos: [{ kind: "telegram", fileId: "f1" }],
+      },
     });
-    // intake_item_id 為 null → not_found（證明有檢查 approved 先繼續）
     await expect(
-      getListingPhoto(supabase as never, "token", ID, "0"),
+      getListingPhoto(supabase as never, undefined, ID, "0"),
+    ).rejects.toMatchObject({ code: "no_bot_token" });
+  });
+
+  it("展示相 index 越界 → not_found", async () => {
+    const { supabase } = createFakeSupabase({
+      draft: {
+        id: ID,
+        status: "approved",
+        area_type: "market",
+        photos: [{ kind: "telegram", fileId: "f1" }],
+      },
+    });
+    await expect(
+      getListingPhoto(supabase as never, "token", ID, "5"),
     ).rejects.toMatchObject({ code: "not_found" });
   });
 
@@ -77,6 +110,33 @@ describe("getListingPhoto", () => {
     await expect(
       getListingPhoto(supabase as never, "token", "not-a-uuid", "0"),
     ).rejects.toMatchObject({ code: "not_found" });
+  });
+
+  it("PhotoError 帶有 code 同 message", () => {
+    const e = new PhotoError("not_found", "x");
+    expect(e.code).toBe("not_found");
+    expect(e.message).toBe("x");
+    expect(e.name).toBe("PhotoError");
+  });
+  it("approved draft 嘅 manual 相 → 由 Supabase Storage 攞", async () => {
+    const manualKey = "33333333-3333-3333-3333-333333333333";
+    const { supabase, downloads } = createFakeSupabase({
+      draft: {
+        id: ID,
+        status: "approved",
+        area_type: "market",
+        photos: [{ kind: "manual", storageKey: manualKey }],
+      },
+    });
+    const result = await getListingPhoto(
+      supabase as never,
+      "token",
+      ID,
+      "0",
+    );
+    expect(result.mimeType).toBe("image/jpeg");
+    expect(result.buffer.length).toBe(4);
+    expect(downloads).toEqual([{ bucket: "venue-photos", key: manualKey }]);
   });
 
   it("PhotoError 帶有 code 同 message", () => {

@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState } from "react";
 import { SlidersHorizontal, X, ShieldCheck } from "lucide-react";
 import type { ListingFilters } from "../../lib/listing-types.js";
+import { shouldResetFiltersOnReload } from "../../lib/filter-reload.js";
 
 // v2 = new inline confirm design (v1 was full-page gate, removed).
 // version bump forces existing users (incl. those who agreed under v1) to see the new flow once.
@@ -88,10 +89,22 @@ export function Filters({
     }
   }, []);
 
+  // Reload 視為重新開始：清空首頁臨時篩選，返回完整列表。
+  // 貼上分享連結、上一頁／下一頁不屬於 reload，所以保留 query。
+  useEffect(() => {
+    const [navigation] = performance.getEntriesByType("navigation") as
+      | PerformanceNavigationTiming[]
+      | [];
+    if (shouldResetFiltersOnReload(window.location.search, navigation?.type)) {
+      window.location.replace("/");
+    }
+  }, []);
+
   const hasActive =
     filters.areaType !== null ||
     filters.district !== null ||
-    filters.date !== null;
+    filters.date !== null ||
+    filters.linkReit;
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     if (agreed) return; // 已同意：照正常 GET 提交篩選。
@@ -124,6 +137,16 @@ export function Filters({
           ))}
         </select>
       </div>
+
+      <label className="filters__field filters__field--check">
+        <input
+          type="checkbox"
+          name="linkReit"
+          value="1"
+          defaultChecked={filters.linkReit}
+        />
+        <span>只睇領展場地</span>
+      </label>
 
       <div className="filters__field">
         <label htmlFor="district" className="field-label">

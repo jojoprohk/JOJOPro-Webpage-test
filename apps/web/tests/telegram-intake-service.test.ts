@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { IntakeInput, ParseResult } from "@jopojo/ai";
+import type { IntakeInput, ParseResult } from "@jojopro/ai";
 import { processTelegramIntake } from "../src/lib/telegram-intake-service.js";
 
 const input: IntakeInput = {

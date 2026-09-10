@@ -150,7 +150,9 @@ function resolveRange(
 }
 
 function parseRow(line: string, month: number, year: number): ParsedRow | null {
-  const cleaned = line.replace(/[*🔥😁🎀🛍️🈹🉑]/g, "").trim();
+  // 必須開 `u` flag：emoji 係代理對（surrogate pair），唔開 u 會按
+  // 16-bit code unit 拆開比對，隨時鋸斷成孤立代理字符，令下游 JSON 寫入爆錯。
+  const cleaned = line.replace(/[*🔥😁🎀🛍️🈹🉑]/gu, "").trim();
   const m = DATE_PREFIX_RE.exec(cleaned);
   if (!m) return null;
 
@@ -265,7 +267,7 @@ export function parseRosterPost(
   let matchedHeading = false;
 
   for (const line of lines) {
-    const cleanedLine = line.replace(/[*🔥😁🎀🛍️🈹🉑]/g, "").trim();
+    const cleanedLine = line.replace(/[*🔥😁🎀🛍️🈹🉑]/gu, "").trim();
     const hm = monthFromHeading(cleanedLine);
     if (hm && /月/.test(cleanedLine) && cleanedLine.length <= 12) {
       currentMonth = hm;

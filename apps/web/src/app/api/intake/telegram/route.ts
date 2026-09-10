@@ -6,6 +6,7 @@ import {
 import { createLlmVenueCompleter } from "../../../../lib/llm-venue-completer";
 import { processTelegramIntake } from "../../../../lib/telegram-intake-service";
 import { parseTelegramVenueUpdate, type TelegramUpdate } from "../../../../lib/telegram-parser";
+import { createTelegramPhotoFetcher } from "../../../../lib/telegram-photo";
 import {
   createSupabaseServiceClient,
   createVenueRepository,
@@ -14,6 +15,8 @@ import { sendTelegramReply } from "../../../../lib/telegram-bot";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// Vercel serverless：容許 vision OCR 完整時間，避免 60 秒 timeout。
+export const maxDuration = 60;
 
 export async function POST(request: Request) {
   const secretHeader = request.headers.get(
@@ -46,12 +49,14 @@ export async function POST(request: Request) {
 
     const repository = createVenueRepository(createSupabaseServiceClient());
     const completeJson = createLlmVenueCompleter();
+    const fetchPhotos = createTelegramPhotoFetcher(process.env.TELEGRAM_BOT_TOKEN);
 
     const result = await processTelegramIntake({
       update,
       completeJson,
       repository,
       allowedChatIds: getTelegramAllowedChatIds(),
+      fetchPhotos,
     });
 
     // 處理完再覆用戶摘要
@@ -68,9 +73,13 @@ export async function POST(request: Request) {
           );
         } else if (result.status === "skipped") {
           console.log("[intake-route] sending 📭 reply");
+          // 將 AI 嘅實際原因加入回覆，用戶可以即時理解點解判斷唔係場地。
+          const reason = result.reason
+            ? `\n\n原因：${result.reason}`
+            : "";
           void sendTelegramReply(
             chatId,
-            "📭 收到呢批資料，但睇唔落係場地資訊，已標記待你確認。",
+            `📭 收到呢批資料，但睇唔落係場地招租資訊，已標記待你確認。${reason}`,
           );
         } else if (result.status === "forbidden") {
           console.log("[intake-route] sending 🚫 reply");

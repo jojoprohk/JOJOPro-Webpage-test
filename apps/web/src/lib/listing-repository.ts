@@ -34,6 +34,9 @@ interface ApprovedListingRow {
   report_count: number | null;
   last_reviewed_at: string | null;
   created_at: string;
+  is_featured: boolean;
+  featured_at: string | null;
+  is_link_reit: boolean;
   intake: {
     source_label: string;
     source_url: string | null;
@@ -94,6 +97,9 @@ export function mapRowToPublicListing(row: ApprovedListingRow): PublicListing {
         firstPhotoKind,
       };
     })(),
+    isFeatured: row.is_featured,
+    featuredAt: row.featured_at,
+    isLinkReit: row.is_link_reit,
   };
 }
 
@@ -101,6 +107,8 @@ export interface ListingRepository {
   listApprovedListings(): Promise<PublicListing[]>;
   // 回報過期：increment report_count。返 true 表示搵到並更新。
   reportListing(id: string, nowIso: string): Promise<boolean>;
+  // 設定 featured 旗標。on=true 標記並 stamp featured_at；on=false 移除 featured 狀態（featured_at 保留作歷史）。
+  setFeatured(id: string, on: boolean, nowIso: string): Promise<boolean>;
 }
 
 export function createListingRepository(
@@ -116,6 +124,7 @@ export function createListingRepository(
             "contact_whatsapp_link, has_aircon, photos, is_prime_spot, is_cart_spot, allows_food, " +
             "allows_dry_goods, allows_beauty, allows_service, requires_product_approval, " +
             "is_urgent, is_discounted, summary, report_count, last_reviewed_at, created_at, " +
+            "is_featured, featured_at, is_link_reit, " +
             "intake:intake_items(source_label, source_url)",
         )
         .eq("status", "approved")
@@ -141,6 +150,23 @@ export function createListingRepository(
         throw new Error(error.message);
       }
       return data !== null && data !== undefined;
+    },
+
+    async setFeatured(id, on, nowIso) {
+      // on=true  → 寫 featured_at = now；on=false → 清 featured_at（保留 is_featured=false 旗標）。
+      const update = on
+        ? { is_featured: true, featured_at: nowIso }
+        : { is_featured: false, featured_at: null };
+      const { data, error } = await supabase
+        .from("venue_drafts")
+        .update(update)
+        .eq("id", id)
+        .eq("status", "approved")
+        .select("id");
+      if (error) {
+        throw new Error(error.message);
+      }
+      return Array.isArray(data) && data.length > 0;
     },
   };
 }

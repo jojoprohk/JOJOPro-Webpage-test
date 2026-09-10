@@ -6,7 +6,11 @@ import { downloadTelegramPhoto } from "./telegram-photo.js";
 
 export class PhotoError extends Error {
   constructor(
-    public code: "not_found" | "no_bot_token" | "upstream_failed",
+    public code:
+      | "not_found"
+      | "no_bot_token"
+      | "upstream_failed"
+      | "missing_storage",
     message: string,
   ) {
     super(message);
@@ -106,6 +110,9 @@ async function serveDraftPhoto(
   if (photo.kind === "stock") {
     return readStockPhoto(photo.src);
   }
+  if (photo.kind === "manual") {
+    return readManualPhoto(supabase, photo.storageKey);
+  }
   // telegram 相
   if (!botToken) {
     throw new PhotoError("no_bot_token", "missing bot token");
@@ -184,4 +191,33 @@ export async function getIntakePhoto(
       e instanceof Error ? e.message : "photo download failed",
     );
   }
+}
+// Manual 候補相喺 Supabase Storage private bucket 入面。
+// key 只可以係 UUID（由 /api/review/uploads 產生），再由 photo proxy 用 service role
+// 下載，避免公開 bucket 同任意路徑。
+const MANUAL_BUCKET = "venue-photos";
+const MANUAL_KEY_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function readManualPhoto(
+  supabase: SupabaseClient,
+  storageKey: string,
+): Promise<{ buffer: Buffer; mimeType: string }> {
+  if (!MANUAL_KEY_RE.test(storageKey)) {
+    throw new PhotoError("not_found", "bad manual storage key");
+  }
+  const { data, error } = await supabase.storage
+    .from(MANUAL_BUCKET)
+    .download(storageKey);
+  if (error || !data) {
+    throw new PhotoError(
+      "missing_storage",
+      error?.message ?? "manual photo not found",
+    );
+  }
+  const arrayBuffer = await data.arrayBuffer();
+  return {
+    buffer: Buffer.from(arrayBuffer),
+    mimeType: data.type || "image/jpeg",
+  };
 }

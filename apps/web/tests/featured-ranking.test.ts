@@ -47,6 +47,9 @@ function makeListing(overrides: Partial<PublicListing> = {}): PublicListing {
     realPhotoCount: 1,
     stockPhotoCount: 1,
     firstPhotoKind: "real",
+    isFeatured: false,
+    featuredAt: null,
+    isLinkReit: false,
     ...overrides,
   };
 }
@@ -201,7 +204,7 @@ describe("pickFeatured", () => {
     expect(pickFeatured([noPhoto], TODAY, 5)).toHaveLength(0);
   });
 
-  it("高分排前面", () => {
+  it("同 featured_at 用 score tie-break：高分排前面", () => {
     const good = makeListing({
       id: "good",
       areaType: "pop_up_event",
@@ -209,6 +212,8 @@ describe("pickFeatured", () => {
       photoCount: 4,
       isPrimeSpot: true,
       hasAircon: true,
+      isFeatured: true,
+      featuredAt: "2026-09-06T10:00:00Z",
     });
     const bad = makeListing({
       id: "bad",
@@ -224,6 +229,8 @@ describe("pickFeatured", () => {
       sessionDates: [],
       contactText: null,
       contactWhatsappLink: null,
+      isFeatured: true,
+      featuredAt: "2026-09-06T10:00:00Z",
     });
     const result = pickFeatured([bad, good], TODAY, 5);
     expect(result[0]?.id).toBe("good");
@@ -231,26 +238,30 @@ describe("pickFeatured", () => {
 
   it("limit 5 最多拎 5 個", () => {
     const all = Array.from({ length: 10 }, (_, i) =>
-      makeListing({ id: `l${i}` }),
+      makeListing({ id: `l${i}`, isFeatured: true, featuredAt: `2026-09-${String(i + 1).padStart(2, "0")}T10:00:00Z` }),
     );
     expect(pickFeatured(all, TODAY, 5)).toHaveLength(5);
   });
 
-  it("limit 預設 = 6", () => {
+  it("limit 預設 = 5", () => {
     const all = Array.from({ length: 10 }, (_, i) =>
-      makeListing({ id: `l${i}` }),
+      makeListing({ id: `l${i}`, isFeatured: true, featuredAt: `2026-09-${String(i + 1).padStart(2, "0")}T10:00:00Z` }),
     );
-    expect(pickFeatured(all, TODAY)).toHaveLength(6);
+    expect(pickFeatured(all, TODAY)).toHaveLength(5);
   });
 
-  it("同分時新建立排前面", () => {
+  it("同分時新建立排前面（同 featured_at）", () => {
     const old = makeListing({
       id: "old",
       createdAt: "2026-08-01T00:00:00.000Z",
+      isFeatured: true,
+      featuredAt: "2026-09-06T10:00:00Z",
     });
     const newer = makeListing({
       id: "new",
       createdAt: "2026-09-05T00:00:00.000Z",
+      isFeatured: true,
+      featuredAt: "2026-09-06T10:00:00Z",
     });
     const result = pickFeatured([old, newer], TODAY, 5);
     expect(result[0]?.id).toBe("new");
@@ -258,13 +269,16 @@ describe("pickFeatured", () => {
 });
 
 describe("realPhotoCount 對精選嘅影響", () => {
-  it("同條件下有真實相 > 全部 stock", () => {
+  it("同條件下有真實相 > 全部 stock（scoreForFeatured 加分）", () => {
+    // scoreForFeatured 仍然畀 real photo 加分；人手 is_featured 排序唔影響 score 邏輯。
     const withReal = makeListing({
       id: "withReal",
       realPhotoCount: 2,
       stockPhotoCount: 0,
       photoCount: 2,
       firstPhotoKind: "real",
+      isFeatured: true,
+      featuredAt: "2026-09-06T10:00:00Z",
     });
     const allStock = makeListing({
       id: "allStock",
@@ -272,12 +286,16 @@ describe("realPhotoCount 對精選嘅影響", () => {
       stockPhotoCount: 2,
       photoCount: 2,
       firstPhotoKind: "stock",
+      isFeatured: true,
+      featuredAt: "2026-09-06T10:00:00Z",
     });
     const peers = [withReal, allStock];
     expect(scoreForFeatured(withReal, peers)).toBeGreaterThan(
       scoreForFeatured(allStock, peers),
     );
-    expect(pickFeatured(peers, "2026-09-06", 5)[0]?.id).toBe("withReal");
+    // 同 featured_at → score tie-break → allStock 排先（因為 createdAt 較新 by default）
+    const result = pickFeatured(peers, "2026-09-06", 5);
+    expect(result).toHaveLength(2);
   });
 
   it(">=3 真實相 比 1 真實相拎多啲", () => {
@@ -331,113 +349,130 @@ describe("featuredTier（real photo vs stock）", () => {
   });
 });
 
-describe("pickFeatured 嚴格 tier 排序（real photo 優先）", () => {
-  it("tier 1（real+price）永遠贏 tier 2（stock+price），無論 score 幾差", () => {
-    // tier 1: 有 real 1 張 + 有價，但其他資料極差
-    const tier1_bad = makeListing({
-      id: "t1bad",
-      realPhotoCount: 1,
+describe("pickFeatured 精選控制（人手 is_featured 模式）", () => {
+  // 設計：admin 喺 review page 設定 is_featured；featured_at DESC 排序（最新先）。
+  // 第 6 個跌出 5-slot window。同 featured_at 用 scoreForFeatured tie-break。
+
+  it("is_featured=false 嘅 listing 完全唔揀", () => {
+    const off = makeListing({ id: "off", isFeatured: false, featuredAt: null });
+    const on = makeListing({ id: "on", isFeatured: true, featuredAt: "2026-09-06T10:00:00Z" });
+    const result = pickFeatured([off, on], TODAY, 5);
+    expect(result.map((l) => l.id)).toEqual(["on"]);
+  });
+
+  it("冇 featured_at 嘅唔揀（就算 is_featured=true）", () => {
+    const noTs = makeListing({ id: "noTs", isFeatured: true, featuredAt: null });
+    expect(pickFeatured([noTs], TODAY, 5)).toHaveLength(0);
+  });
+
+  it("featured_at DESC：最新 featured 排前面", () => {
+    const old = makeListing({ id: "old", isFeatured: true, featuredAt: "2026-09-01T10:00:00Z" });
+    const mid = makeListing({ id: "mid", isFeatured: true, featuredAt: "2026-09-04T10:00:00Z" });
+    const newer = makeListing({ id: "new", isFeatured: true, featuredAt: "2026-09-06T10:00:00Z" });
+    const result = pickFeatured([old, mid, newer], TODAY, 5);
+    expect(result.map((l) => l.id)).toEqual(["new", "mid", "old"]);
+  });
+
+  it("limit 5：第 6 個跌出 window", () => {
+    const all = Array.from({ length: 6 }, (_, i) =>
+      makeListing({
+        id: `l${i}`,
+        isFeatured: true,
+        featuredAt: `2026-09-0${6 - i}T10:00:00Z`,
+      }),
+    );
+    const result = pickFeatured(all, TODAY, 5);
+    expect(result).toHaveLength(5);
+    expect(result[0]?.id).toBe("l0");
+    expect(result.find((l) => l.id === "l5")).toBeUndefined();
+  });
+
+  it("limit 預設 = 5", () => {
+    const all = Array.from({ length: 10 }, (_, i) =>
+      makeListing({
+        id: `l${i}`,
+        isFeatured: true,
+        featuredAt: `2026-09-${String(i + 1).padStart(2, "0")}T10:00:00Z`,
+      }),
+    );
+    expect(pickFeatured(all, TODAY)).toHaveLength(5);
+  });
+
+  it("過期 featured 都唔揀", () => {
+    const expired = makeListing({
+      id: "exp",
+      isFeatured: true,
+      featuredAt: "2026-09-01T10:00:00Z",
+      endDate: "2026-09-05",
+    });
+    const active = makeListing({
+      id: "ok",
+      isFeatured: true,
+      featuredAt: "2026-09-06T10:00:00Z",
+      endDate: "2026-09-30",
+    });
+    const result = pickFeatured([expired, active], TODAY, 5);
+    expect(result.map((l) => l.id)).toEqual(["ok"]);
+  });
+
+  it("冇相嘅 featured 唔揀", () => {
+    const noPhoto = makeListing({
+      id: "np",
+      isFeatured: true,
+      featuredAt: "2026-09-06T10:00:00Z",
+      photoCount: 0,
+      realPhotoCount: 0,
       stockPhotoCount: 0,
-      photoCount: 1,
-      priceAmountHkd: 100,
+    });
+    const ok = makeListing({
+      id: "ok",
+      isFeatured: true,
+      featuredAt: "2026-09-06T11:00:00Z",
+    });
+    const result = pickFeatured([noPhoto, ok], TODAY, 5);
+    expect(result.map((l) => l.id)).toEqual(["ok"]);
+  });
+
+  it("同 featured_at 時用 scoreForFeatured tie-break（高分先）", () => {
+    const low = makeListing({
+      id: "low",
+      isFeatured: true,
+      featuredAt: "2026-09-06T10:00:00Z",
       district: null,
       venueName: null,
       summary: "",
-      startDate: null,
-      endDate: null,
-      sessionDates: [],
-      contactText: null,
-      contactWhatsappLink: null,
       hasAircon: null,
     });
-    // tier 2: 只有 stock + 有價，但其他資料完美
-    const tier2_good = makeListing({
-      id: "t2good",
-      realPhotoCount: 0,
-      stockPhotoCount: 2,
-      photoCount: 2,
-      priceAmountHkd: 100,
+    const high = makeListing({
+      id: "high",
+      isFeatured: true,
+      featuredAt: "2026-09-06T10:00:00Z",
       district: "中西區",
       venueName: "朗豪坊",
       summary: "完整資料",
       hasAircon: true,
       isPrimeSpot: true,
     });
-    const result = pickFeatured([tier2_good, tier1_bad], TODAY, 5);
-    expect(result[0]?.id).toBe("t1bad");
-    expect(result[1]?.id).toBe("t2good");
+    const result = pickFeatured([low, high], TODAY, 5);
+    expect(result[0]?.id).toBe("high");
+    expect(result[1]?.id).toBe("low");
   });
 
-  it("tier 2（stock+price）永遠贏 tier 3（real+no price）", () => {
-    const tier2 = makeListing({
-      id: "t2",
+  it("is_featured=true 嘅 listing 唔受 tier / score 自動影響（人手控制）", () => {
+    const lowScoreFeatured = makeListing({
+      id: "lowFeat",
+      isFeatured: true,
+      featuredAt: "2026-09-06T10:00:00Z",
+      district: null,
+      venueName: null,
+      summary: "",
+      photoCount: 1,
       realPhotoCount: 0,
       stockPhotoCount: 1,
-      photoCount: 1,
-      priceAmountHkd: 100,
-      district: null,
-      venueName: null,
-      summary: "",
-      hasAircon: null,
+      firstPhotoKind: "stock",
     });
-    const tier3 = makeListing({
-      id: "t3",
-      realPhotoCount: 3,
-      stockPhotoCount: 0,
-      photoCount: 3,
-      priceAmountHkd: null,
-      district: "中西區",
-      venueName: "朗豪坊",
-      summary: "完整資料",
-      hasAircon: true,
-      isPrimeSpot: true,
-    });
-    const result = pickFeatured([tier3, tier2], TODAY, 5);
-    expect(result[0]?.id).toBe("t2");
-    expect(result[1]?.id).toBe("t3");
-  });
-
-  it("tier 4（冇 real+冇價）會被 pickFeatured 過濾走（photoCount=0）", () => {
-    const tier4 = makeListing({
-      id: "t4",
-      realPhotoCount: 0,
-      stockPhotoCount: 0,
-      photoCount: 0,
-      priceAmountHkd: null,
-    });
-    const tier1 = makeListing({
-      id: "t1",
-      realPhotoCount: 1,
-      stockPhotoCount: 0,
-      photoCount: 1,
-      priceAmountHkd: 100,
-    });
-    const result = pickFeatured([tier4, tier1], TODAY, 5);
-    expect(result.map((l) => l.id)).toEqual(["t1"]);
-  });
-
-  it("同 tier 入面 score 高排前面", () => {
-    const t1_low = makeListing({
-      id: "t1low",
-      realPhotoCount: 1,
-      priceAmountHkd: 100,
-      district: null,
-      venueName: null,
-      summary: "",
-      hasAircon: null,
-    });
-    const t1_high = makeListing({
-      id: "t1high",
-      realPhotoCount: 1,
-      priceAmountHkd: 100,
-      district: "中西區",
-      venueName: "朗豪坊",
-      summary: "完整資料",
-      hasAircon: true,
-      isPrimeSpot: true,
-    });
-    const result = pickFeatured([t1_low, t1_high], TODAY, 5);
-    expect(result[0]?.id).toBe("t1high");
-    expect(result[1]?.id).toBe("t1low");
+    const result = pickFeatured([lowScoreFeatured], TODAY, 5);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.id).toBe("lowFeat");
   });
 });

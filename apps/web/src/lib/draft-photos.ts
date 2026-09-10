@@ -46,6 +46,19 @@ export function coerceVenuePhotos(value: unknown): VenuePhoto[] | null {
         return null;
       }
       out.push({ kind: "stock", src });
+    } else if (kind === "manual") {
+      const storageKey = (item as { storageKey?: unknown }).storageKey;
+      if (
+        typeof storageKey !== "string" ||
+        storageKey.length === 0 ||
+        storageKey.length > 64 ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          storageKey,
+        )
+      ) {
+        return null;
+      }
+      out.push({ kind: "manual", storageKey });
     } else {
       return null;
     }

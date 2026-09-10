@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ClipboardCheck, Lock, ArrowLeft, CheckCircle2, XCircle } from "lucide-react";
+import { ClipboardCheck, Lock, ArrowLeft, CheckCircle2, XCircle, Search } from "lucide-react";
 import { DraftCard, type CardAct } from "./draft-card";
 import { ApprovedCard } from "./approved-card";
 import { Reveal, RevealGrid } from "../components/motion.js";
@@ -22,10 +22,19 @@ export default function ReviewPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [batchBusy, setBatchBusy] = useState(false);
   const [batchMsg, setBatchMsg] = useState("");
+  // 已批准分頁嘅搜尋字串（搜 title / district / venue_name / source_label / price_text）
+  const [approvedQuery, setApprovedQuery] = useState("");
 
   const actsRef = useRef<Map<string, CardAct>>(new Map());
   const registerAct = useCallback((id: string, act: CardAct) => {
     actsRef.current.set(id, act);
+  }, []);
+
+  // 由 ApprovedCard 改動之後更新本地 list，咁 reload 前嘅 UI 都即時反映。
+  const updateApproved = useCallback((next: Draft) => {
+    setApproved((prev) =>
+      (prev ?? []).map((d) => (d.id === next.id ? next : d)),
+    );
   }, []);
 
   const load = useCallback(async () => {
@@ -173,6 +182,22 @@ export default function ReviewPage() {
 
   const pending = drafts ?? [];
   const approvedList = approved ?? [];
+  // 過濾 approved list：match title / venue_name / district / source_label / price_text
+  const approvedQueryTrim = approvedQuery.trim().toLowerCase();
+  const filteredApproved = approvedQueryTrim === ""
+    ? approvedList
+    : approvedList.filter((d) => {
+        const hay = [
+          d.title,
+          d.venue_name ?? "",
+          d.district ?? "",
+          d.intake?.source_label ?? "",
+          d.price_text ?? "",
+          d.booth_size_text ?? "",
+          d.contact_text ?? "",
+        ].join(" ").toLowerCase();
+        return hay.includes(approvedQueryTrim);
+      });
   const allSelected = pending.length > 0 && selected.size === pending.length;
 
   return (
@@ -278,13 +303,31 @@ export default function ReviewPage() {
       ) : (
         <>
           {approved === null && <p className="loading">載入中…</p>}
+          <div className="review-search">
+            <Search size={16} />
+            <input
+              type="search"
+              value={approvedQuery}
+              onChange={(e) => setApprovedQuery(e.target.value)}
+              placeholder="搜尋標題、地區、場地名、來源、價錢…"
+              aria-label="搜尋已批准場地"
+            />
+            {approvedQuery && (
+              <span className="review-search__count">
+                {filteredApproved.length} / {approvedList.length}
+              </span>
+            )}
+          </div>
           {approved !== null && approvedList.length === 0 && (
             <p className="notice">未有已批准場地。</p>
           )}
-          {approved !== null && (
+          {approved !== null && approvedList.length > 0 && filteredApproved.length === 0 && (
+            <p className="notice">冇符合「{approvedQuery}」嘅已批准場地。</p>
+          )}
+          {approved !== null && filteredApproved.length > 0 && (
             <RevealGrid>
-              {approvedList.map((d) => (
-                <ApprovedCard key={d.id} draft={d} />
+              {filteredApproved.map((d) => (
+                <ApprovedCard key={d.id} draft={d} onChanged={updateApproved} />
               ))}
             </RevealGrid>
           )}

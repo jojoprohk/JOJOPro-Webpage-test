@@ -76,7 +76,8 @@ describe("parseVenuePost", () => {
 
     expect(result.status).toBe("needs_review");
     expect(result.entries).toHaveLength(1);
-    expect(result.entries[0].draft.district).toBe("葵涌");
+    // 自由文字「葵涌」會自動正規化做標準 18 區名。
+    expect(result.entries[0].draft.district).toBe("葵青區");
     expect(result.entries[0].draft.priceAmountHkd).toBe(1600);
     expect(result.entries[0].lowConfidenceFields).toContain("hasAircon");
   });

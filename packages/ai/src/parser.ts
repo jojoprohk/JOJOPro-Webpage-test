@@ -1,5 +1,6 @@
 import { buildVenueParseMessages, buildVenuePhotoInstruction } from "./prompt.js";
 import { parseRosterPost } from "./roster.js";
+import { inferDistrict, normalizeDistrict } from "./districts.js";
 import type {
   IntakeInput,
   MultiVenueResult,
@@ -143,6 +144,36 @@ function normalizeDatesOnDraft(draft: VenueDraft) {
   }
 }
 
+// 統一地區：LLM/規則填咗嘢就先正規化做標準 18 區；對唔到或留空，
+// 再用場名/標題/原文做確定性推理。最終都唔知 → null，並標記為低信心
+// （審核頁會高亮地區下拉，等用戶一按揀返）。
+function normalizeDistrictOnDraft(
+  entry: VenueDraftEntry,
+  rawContent?: string,
+) {
+  const draft = entry.draft;
+  let district = normalizeDistrict(draft.district);
+  if (!district) {
+    district = inferDistrict(
+      draft.venueName,
+      draft.title,
+      draft.boothSizeText,
+      draft.summary,
+      rawContent,
+    );
+  }
+  draft.district = district;
+
+  if (!district) {
+    if (!entry.lowConfidenceFields.includes("district")) {
+      entry.lowConfidenceFields.push("district");
+    }
+    if (!entry.unconfirmedFields.includes("district")) {
+      entry.unconfirmedFields.push("district");
+    }
+  }
+}
+
 export function looksLikeVenuePost(rawContent: string) {
   const normalized = normalizeText(rawContent);
   const hasVenueSignal = venueSignals.some((signal) =>
@@ -183,8 +214,10 @@ function getMissingEssentialFields(draft: VenueDraft): VenueDraftField[] {
 function normalizeEntry(
   entry: VenueDraftEntry,
   hasPhotos: boolean,
+  rawContent?: string,
 ): VenueDraftEntry {
   normalizeDatesOnDraft(entry.draft);
+  normalizeDistrictOnDraft(entry, rawContent);
 
   if (hasPhotos) {
     const hasAnyDate =
@@ -292,7 +325,7 @@ export async function parseVenuePost(
   }
 
   const normalized = result.entries.map((entry) =>
-    normalizeEntry(entry, hasPhotos),
+    normalizeEntry(entry, hasPhotos, input.rawContent),
   );
 
   // 逐個場地分：代放跳過，正常收錄。
@@ -340,7 +373,9 @@ export async function parseVenuePost(
 
 // 規則解析出嚟嘅清單，同大模型結果一齊走相同嘅正規化/代放分流。
 function finalizeRoster(roster: MultiVenueResult): ParseResult {
-  const normalized = roster.entries.map((entry) => normalizeEntry(entry, false));
+  const normalized = roster.entries.map((entry) =>
+    normalizeEntry(entry, false, undefined),
+  );
   const kept: VenueDraftEntry[] = [];
   const skipped: VenueDraftEntry[] = [];
   for (const entry of normalized) {

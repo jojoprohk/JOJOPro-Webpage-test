@@ -263,3 +263,14 @@ Dev server 嘅 stale compiled output 係次要問題（已 .next cache 清過）
 - linkReit filter 邏輯已有 4 條 unit test 覆蓋（filter 行為 + URL parsing）
 - DB tagging 仍係人手 review；下次再發現唔啱可以 update 同一條 PATCH script
 
+
+---
+
+## 13. Reload 重置首頁篩選（2026-09-09）
+
+文件：`docs/decisions/2026-09-09-filters-reset-on-reload.md`。
+
+- 首頁篩選視為臨時查詢狀態；用戶在帶 query 嘅首頁按 Reload（F5 / Cmd+R）時，client 會用 Navigation Timing 偵測 `reload`，再 `window.location.replace("/")` 回到完整列表。
+- 初次打開／分享連結（`navigate`）、上一頁／下一頁（`back_forward`）、無 query 首頁均不會重置。
+- 免責條款同意狀態同回報防重複記錄仍保留喺 localStorage，今次唔清。
+- 新增 pure helper `apps/web/src/lib/filter-reload.ts` 及 5 個 unit test；apps/web 測試總數 127 全綠。

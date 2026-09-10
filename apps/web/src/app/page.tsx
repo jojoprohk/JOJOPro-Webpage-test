@@ -33,8 +33,8 @@ export default async function HomePage({
     loadFailed = true;
   }
 
-  // 精選：固定置頂（唔受篩選影響），按資料完整度 + 平貴 + 吸引力計分。
-  const featured = toFeaturedItems(pickFeatured(approved, todayInHongKong(), 6));
+  // 精選：固定置頂（唔受篩選影響），由人手 is_featured 控制；最多 5 張。
+  const featured = toFeaturedItems(pickFeatured(approved, todayInHongKong()));
 
   return (
     <>

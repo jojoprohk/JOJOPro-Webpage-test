@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { IntakeInput, ParseResult } from "@jopojo/ai";
+import type { IntakeInput, ParseResult } from "@jojopro/ai";
 import { createVenueRepository } from "../src/lib/venue-repository.js";
 
 const input: IntakeInput = {

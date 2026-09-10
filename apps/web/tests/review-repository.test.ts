@@ -65,6 +65,28 @@ describe("buildDraftUpdate", () => {
     const row = buildDraftUpdate("approve", undefined, "   ", NOW);
     expect(row).not.toHaveProperty("review_note");
   });
+
+  it("save 只儲存欄位，唔改 status 同 last_reviewed_at", () => {
+    const row = buildDraftUpdate(
+      "save",
+      { title: "改咗未批准", district: "觀塘區" },
+      undefined,
+      NOW,
+    );
+    expect(row).not.toHaveProperty("status");
+    expect(row).not.toHaveProperty("last_reviewed_at");
+    expect(row.title).toBe("改咗未批准");
+    expect(row.district).toBe("觀塘區");
+  });
+
+  it("photos 欄位（結構化陣列）可以寫入", () => {
+    const photos = [
+      { kind: "telegram", fileId: "f1" },
+      { kind: "stock", src: "/stock/market.jpg" },
+    ];
+    const row = buildDraftUpdate("save", { photos }, undefined, NOW);
+    expect(row.photos).toEqual(photos);
+  });
 });
 
 // 輕量 fake Supabase query builder：記低 list 參數同 update。

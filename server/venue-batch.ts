@@ -4,7 +4,7 @@ import {
   type JsonCompleter,
   type ParseResult,
   type VenueDraftEntry,
-} from "@jopojo/ai";
+} from "@jojopro/ai";
 import { parseTelegramVenueUpdate } from "../apps/web/src/lib/telegram-parser";
 import type { TelegramUpdate } from "../apps/web/src/lib/telegram-parser";
 import type { VenueRepository } from "../apps/web/src/lib/venue-repository";

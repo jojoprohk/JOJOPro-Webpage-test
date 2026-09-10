@@ -12,9 +12,19 @@ export type AreaType =
   | "pop_up_event"
   | "private_venue"
   | "other"
+  | "exhibition"
   | "unknown";
 
 export type PriceUnit = "day" | "period" | "unknown";
+
+// 公開展示用相。每個樓盤維持自己嘅有序相列表：
+// - telegram：用戶經 Telegram 傳入嘅「真實場地／IG 截圖」（適合展示）。
+// - stock：按場地類型自動配嘅通用代表相（本地、免版權）。
+// 純文字截圖（OCR 用）唔會入呢個列表。
+export type VenuePhoto =
+  | { kind: "telegram"; fileId: string }
+  | { kind: "manual"; storageKey: string }
+  | { kind: "stock"; src: string };
 
 export type ReviewStatus =
   | "needs_review"
@@ -50,6 +60,8 @@ export interface VenueDraft {
   contactText: string | null;
   contactWhatsappLink: string | null;
   areaType: AreaType;
+  // 公開展示相（有序）。向後相容：舊草稿可能冇呢欄，讀取時 fallback 用 stock 相。
+  photos?: VenuePhoto[];
   hasAircon: boolean | null;
   isPrimeSpot: boolean;
   isCartSpot: boolean;
@@ -75,6 +87,10 @@ export interface VenueDraftEntry {
   // 「代放/代租」＝代理幫場主放租，唔係業主本人。逐個場地標示：
   // true 代表呢個場地屬代理資料，誠信起見唔收錄做草稿。
   isAgentListing?: boolean;
+  // 邊幾張附圖係「真實場地／IG 截圖」（適合公開展示），用附圖由 0 開始嘅
+  // index 表達。純文字海報截圖唔列入。app 層據此由 photoFileIds 組 telegram 相；
+  // 冇列入嘅場地一律用場地類型 stock 相。
+  realVenuePhotoIndexes?: number[];
 }
 
 // LLM 原始輸出（未經 parser 正規化）：一條貼文可以含多個場地。

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildEntryPhotos } from "../src/lib/draft-photos.js";
+import { buildEntryPhotos, coerceVenuePhotos } from "../src/lib/draft-photos.js";
 
 describe("buildEntryPhotos 排位", () => {
   it("real 相排最前, stock 相排最後", () => {
@@ -46,5 +46,30 @@ describe("buildEntryPhotos 排位", () => {
     expect(photos).toHaveLength(2); // 1 real + 1 stock
     expect(photos[0]).toEqual({ kind: "telegram", fileId: "a" });
     expect(photos[1]?.kind).toBe("stock");
+  });
+
+  it("manual 相會原樣保留", () => {
+    const manualKey = "11111111-1111-1111-1111-111111111111";
+    expect(
+      coerceVenuePhotos([
+        { kind: "telegram", fileId: "f1" },
+        { kind: "manual", storageKey: manualKey },
+      ]),
+    ).toEqual([
+      { kind: "telegram", fileId: "f1" },
+      { kind: "manual", storageKey: manualKey },
+    ]);
+  });
+
+  it("manual 嘅 storageKey 唔係 uuid → null", () => {
+    expect(
+      coerceVenuePhotos([{ kind: "manual", storageKey: "not-a-uuid" }]),
+    ).toBeNull();
+  });
+
+  it("manual 缺少 storageKey → null", () => {
+    expect(
+      coerceVenuePhotos([{ kind: "manual" }]),
+    ).toBeNull();
   });
 });

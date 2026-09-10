@@ -36,7 +36,12 @@ export async function PATCH(
   }
 
   const action = body.action;
-  if (action !== "approve" && action !== "reject" && action !== "save") {
+  if (
+    action !== "approve" &&
+    action !== "reject" &&
+    action !== "save" &&
+    action !== "toggle_featured"
+  ) {
     return NextResponse.json({ ok: false, error: "bad_action" }, { status: 400 });
   }
 

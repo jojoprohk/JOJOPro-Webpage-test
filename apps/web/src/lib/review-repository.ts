@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export type ReviewAction = "approve" | "reject" | "save";
+export type ReviewAction = "approve" | "reject" | "save" | "toggle_featured";
 
 // 審核頁可以改嘅欄位（camelCase -> 資料庫 snake_case）。
 // 呢個白名單係唯一容許寫入嘅欄位，防止 API 接受任意欄位。
@@ -30,6 +30,8 @@ const EDITABLE_FIELD_MAP: Record<string, string> = {
   isUrgent: "is_urgent",
   isDiscounted: "is_discounted",
   summary: "summary",
+  isFeatured: "is_featured",
+  featuredAt: "featured_at",
 };
 
 function isEditableValue(value: unknown, key: string): boolean {
@@ -63,6 +65,16 @@ export function buildDraftUpdate(
   if (action === "approve" || action === "reject") {
     row.status = action === "approve" ? "approved" : "rejected";
     row.last_reviewed_at = nowIso;
+  } else if (action === "toggle_featured") {
+    // featured toggle 必須讀取當前 is_featured 先決定 on/off。
+    // 客戶端傳 isFeatured (boolean) 入 fields；呢度根據佢寫入並 stamp featured_at。
+    // 若客戶端冇傳 isFeatured 就默認為 true（toggle on）。
+    const wantOn =
+      fields && typeof fields.isFeatured === "boolean"
+        ? (fields.isFeatured as boolean)
+        : true;
+    row.is_featured = wantOn;
+    row.featured_at = wantOn ? nowIso : null;
   }
 
   if (fields) {
@@ -109,6 +121,8 @@ export interface ReviewDraftRow {
   is_urgent: boolean;
   is_discounted: boolean;
   summary: string;
+  is_featured: boolean;
+  featured_at: string | null;
   confidence_score: number;
   low_confidence_fields: string[] | null;
   unconfirmed_fields: string[] | null;

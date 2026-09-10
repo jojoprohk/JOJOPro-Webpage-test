@@ -11,7 +11,9 @@ import { isExpired } from "./listing-filter.js";
 //   - price    (30%)：同一 area_type 入面嘅平貴 percentile
 //   - appeal   (30%)：area_type 吸引力 + 旺位 + 多相 + 冷氣 + 唔使審批
 
-const FEATURED_LIMIT = 6;
+// 每週精選卡顯示上限。
+// Admin 用 review page 手動設定 is_featured；最舊嘅跌出 window。
+const FEATURED_LIMIT = 5;
 
 // 對潛在租戶嚟講最受歡迎嘅 area_type；高 = 高需求。
 const AREA_TYPE_APPEAL: Record<string, number> = {
@@ -120,26 +122,40 @@ export function scoreForFeatured(
   );
 }
 
+// 揀出本週精選嘅 listing。
+//
+// 新規則（人手控制）：
+//   1. Admin 喺 review page toggle 設定 is_featured。
+//   2. featured_at DESC 排序（最新加入先，第 6 個跌出 5-slot window）。
+//   3. 同 featured_at 時用 scoreForFeatured 做 tie-breaker（同日先後加入嘅，用質素排）。
+//   4. 過期場地即使 featured 都唔顯示。
+//   5. 冇相都排除（featured gallery 冇圖冇意義）。
+//
+// 舊嘅 auto-tier（featuredTier）保留喺度，但唔再參與排序；
+// 之後如要「自動建議」可以重用嚟做 UI 提示。
 export function pickFeatured(
   listings: PublicListing[],
   today: string,
   limit: number = FEATURED_LIMIT,
 ): PublicListing[] {
-  // 過期場地直接排除（用戶已講明過期唔顯示）。
-  // 冇相都排除（featured gallery 冇圖冇意義）。
+  // featured 必須同時有 isFeatured=true + featuredAt timestamp（冇 timestamp 當未 featured）
   const candidates = listings.filter(
-    (l) => l.photoCount > 0 && !isExpired(l, today),
+    (l) =>
+      l.isFeatured &&
+      l.featuredAt !== null &&
+      l.photoCount > 0 &&
+      !isExpired(l, today),
   );
   const scored = candidates.map((l) => ({
     listing: l,
     score: scoreForFeatured(l, candidates),
-    tier: featuredTier(l),
+    ts: l.featuredAt ?? "",
   }));
   scored.sort((a, b) => {
-    // 先按 tier（1 最高），tier 入面先按 score。
-    if (a.tier !== b.tier) return a.tier - b.tier;
+    // featured_at DESC：新 featured 排前面。
+    if (a.ts !== b.ts) return a.ts < b.ts ? 1 : -1;
+    // 同時間嘅用質素 tie-break（高分先）。
     if (b.score !== a.score) return b.score - a.score;
-    // 同分揀較新建立嘅。
     return a.listing.createdAt < b.listing.createdAt ? 1 : -1;
   });
   return scored.slice(0, limit).map((s) => s.listing);

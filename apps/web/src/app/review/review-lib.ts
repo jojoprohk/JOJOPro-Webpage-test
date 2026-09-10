@@ -31,6 +31,8 @@ export type Draft = {
   is_urgent: boolean;
   is_discounted: boolean;
   summary: string;
+  is_featured: boolean;
+  featured_at: string | null;
   confidence_score: number;
   low_confidence_fields: string[] | null;
   unconfirmed_fields: string[] | null;

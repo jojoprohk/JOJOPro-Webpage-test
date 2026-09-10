@@ -80,6 +80,9 @@ describe("mapRowToPublicListing", () => {
       report_count: 3,
       last_reviewed_at: "2026-09-01T00:00:00.000Z",
       created_at: "2026-09-01T00:00:00.000Z",
+      is_featured: false,
+      featured_at: null,
+      is_link_reit: false,
       intake: { source_label: "TG group", source_url: null },
     });
     expect(dto).toMatchObject({
@@ -136,6 +139,9 @@ describe("mapRowToPublicListing", () => {
       report_count: null,
       last_reviewed_at: null,
       created_at: "2026-09-01T00:00:00.000Z",
+      is_featured: false,
+      featured_at: null,
+      is_link_reit: false,
       intake: null,
     });
     expect(dto.sourceLabel).toBe("未知來源");
@@ -242,6 +248,9 @@ describe("mapRowToPublicListing photo breakdown", () => {
       report_count: 0,
       last_reviewed_at: null,
       created_at: "2026-09-01T00:00:00.000Z",
+      is_featured: false,
+      featured_at: null,
+      is_link_reit: false,
       intake: null,
     });
     expect(dto.firstPhotoKind).toBe("stock");
@@ -280,6 +289,9 @@ describe("mapRowToPublicListing photo breakdown", () => {
       report_count: 0,
       last_reviewed_at: null,
       created_at: "2026-09-01T00:00:00.000Z",
+      is_featured: false,
+      featured_at: null,
+      is_link_reit: false,
       intake: null,
     });
     expect(dto.firstPhotoKind).toBe("real");

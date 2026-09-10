@@ -112,4 +112,52 @@ describe("parseRosterPost", () => {
     expect(result.entries).toHaveLength(12);
     expect(result.reviewNote).toContain("代");
   });
+
+  it("唔會產生孤立代理字符（emoji 代理對要成對處理）", () => {
+    // 😂 同被清走嘅 🔥/😁 共用高位代理；若清 emoji 嘅正則冇開 u flag，
+    // 會鋸斷代理對，遺下孤立半字符，令下游 JSON 寫入 Postgres 失敗。
+    const emojiRoster = [
+      "😁*九月份*😁",
+      "16-20天平新城😂（私人場）",
+      "21-23翠林C😂（私人場）",
+      "28-3/11北角健威坊😂",
+      "🎀*十月份*🎀",
+      "4-6安蔭商場😂",
+      "4-10石圍角😂",
+      "8-14翠林C😂",
+      "9-15北角健威坊😂",
+      "11-17石圍角😂",
+      "18-24天平新城😂",
+    ].join("\n");
+    const result = parseRosterPost(
+      { ...input, rawContent: emojiRoster },
+      2026,
+    );
+    expect(result).not.toBeNull();
+
+    const hasLoneSurrogate = (s: string) =>
+      /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(
+        s,
+      );
+
+    for (const entry of result!.entries) {
+      const d = entry.draft;
+      const strings = [
+        d.title,
+        d.venueName,
+        d.boothSizeText ?? "",
+        d.summary,
+        ...(d.sessionDates ?? []),
+        ...entry.lowConfidenceFields,
+        ...entry.unconfirmedFields,
+        entry.reviewNote,
+      ];
+      for (const s of strings) {
+        expect(hasLoneSurrogate(s)).toBe(false);
+      }
+    }
+
+    // 成個輸出必須可以安全 JSON 序列化（PostgREST 傳輸嘅前提）。
+    expect(() => JSON.stringify(result!.entries)).not.toThrow();
+  });
 });
