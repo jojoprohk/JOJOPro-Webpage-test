@@ -147,26 +147,41 @@ export function createReviewRepository(
 ): ReviewRepository {
   return {
     async listDrafts(status) {
-      // Step 1: 只 query venue_drafts，唔做 embed / join / 第二次 query。
-      // 之前 2-query 版本有時會 throw ByteString error（character at index 19，
-      // 真正 root cause 仲未搵到 — 可能係 Vercel V8 同 supabase-js .in() 嘅
-      // 某個 interaction）。先用最簡單版本，等 /review 恢復運作先。
-      const { data, error } = await supabase
-        .from("venue_drafts")
-        .select("*")
-        .eq("status", status)
-        .order("created_at", { ascending: false });
+      // 第一性原理 fix：完全繞過 supabase-js，直接打 Supabase REST API。
+      // 之前用 supabase-js + createClient() 時，無論 embed / 2-query / 1-query
+      // 都 throw "Cannot convert argument to a ByteString (character at index 19,
+      // value 8594)"。btoa 喺 auth-js / phoenix 入面（supabase-js init 時 lazy 加載），
+      // 即係話 database query 行嘅時候都可能踩到呢個 error。
+      // 用 raw fetch 就完全避開 supabase-js 嘅 init 同 wrapper。
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-      if (error) {
-        throw new Error(error.message);
+      if (!supabaseUrl || !serviceRoleKey) {
+        throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
       }
 
-      // intake 暫時 null，唔阻住 page render。
-      // 之後可以用 RPC / raw SQL 兜返。
-      return ((data ?? []) as ReviewDraftRow[]).map((d) => ({
-        ...d,
-        intake: null,
-      }));
+      const params = new URLSearchParams({
+        select: "*",
+        status: `eq.${status}`,
+        order: "created_at.desc",
+      });
+      const url = `${supabaseUrl.replace(/\/$/, "")}/rest/v1/venue_drafts?${params.toString()}`;
+
+      const res = await fetch(url, {
+        headers: {
+          apikey: serviceRoleKey,
+          Authorization: `Bearer ${serviceRoleKey}`,
+        },
+        cache: "no-store",
+      });
+
+      if (!res.ok) {
+        const body = await res.text();
+        throw new Error(`Supabase ${res.status}: ${body.slice(0, 200)}`);
+      }
+
+      const drafts = (await res.json()) as Omit<ReviewDraftRow, "intake">[];
+      return drafts.map((d) => ({ ...d, intake: null } as ReviewDraftRow));
     },
 
     async updateDraft(id, row) {
