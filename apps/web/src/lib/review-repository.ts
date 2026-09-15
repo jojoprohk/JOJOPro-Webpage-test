@@ -147,30 +147,51 @@ export function createReviewRepository(
 ): ReviewRepository {
   return {
     async listDrafts(status) {
-      // 第一性原理 fix：完全繞過 supabase-js，直接打 Supabase REST API。
-      // 之前用 supabase-js + createClient() 時，無論 embed / 2-query / 1-query
-      // 都 throw "Cannot convert argument to a ByteString (character at index 19,
-      // value 8594)"。btoa 喺 auth-js / phoenix 入面（supabase-js init 時 lazy 加載），
-      // 即係話 database query 行嘅時候都可能踩到呢個 error。
-      // 用 raw fetch 就完全避開 supabase-js 嘅 init 同 wrapper。
-      const supabaseUrl = process.env.SUPABASE_URL;
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      // Diagnostic + raw fetch.
+      // Without cookie -> 401 (works). With cookie -> 500 ByteString.
+      // Theory: env var (SUPABASE_URL or SERVICE_ROLE_KEY) has non-ASCII char,
+      // undici header validation throws ByteString when building the request.
+      const supabaseUrl = process.env.SUPABASE_URL || "";
+      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+
+      // 1. Print env var lengths + scan for non-ASCII
+      console.log(`[review-drafts] SUPABASE_URL length=${supabaseUrl.length} SERVICE_ROLE_KEY length=${serviceRoleKey.length}`);
+      const scan = (label: string, s: string) => {
+        for (let i = 0; i < s.length; i++) {
+          if (s.charCodeAt(i) > 127) {
+            console.error(`[review-drafts] NON-ASCII in ${label} at index ${i}: charCode=${s.charCodeAt(i)}`);
+          }
+        }
+      };
+      scan("SUPABASE_URL", supabaseUrl);
+      scan("SERVICE_ROLE_KEY", serviceRoleKey);
 
       if (!supabaseUrl || !serviceRoleKey) {
         throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
       }
 
+      // 2. Build URL safely
+      const cleanBase = supabaseUrl.replace(/\/$/, "");
       const params = new URLSearchParams({
         select: "*",
         status: `eq.${status}`,
         order: "created_at.desc",
       });
-      const url = `${supabaseUrl.replace(/\/$/, "")}/rest/v1/venue_drafts?${params.toString()}`;
+      const url = `${cleanBase}/rest/v1/venue_drafts?${params.toString()}`;
+
+      console.log(`[review-drafts] url length=${url.length}`);
+
+      // 3. Use Buffer to ASCII-encode the key (defensive — kill any non-ASCII bytes).
+      // If the original key has non-ASCII, this truncates at first bad char and we log it.
+      const asciiKey = serviceRoleKey.replace(/[^\x00-\x7f]/g, "?");
+      if (asciiKey !== serviceRoleKey) {
+        console.error(`[review-drafts] SERVICE_ROLE_KEY contained non-ASCII chars, replaced with '?'`);
+      }
 
       const res = await fetch(url, {
         headers: {
-          apikey: serviceRoleKey,
-          Authorization: `Bearer ${serviceRoleKey}`,
+          apikey: asciiKey,
+          Authorization: `Bearer ${asciiKey}`,
         },
         cache: "no-store",
       });
