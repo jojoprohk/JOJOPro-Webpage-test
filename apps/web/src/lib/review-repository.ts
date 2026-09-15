@@ -147,63 +147,25 @@ export function createReviewRepository(
 ): ReviewRepository {
   return {
     async listDrafts(status) {
-      // Step 1: 攞 drafts
-      const { data: drafts, error: draftsError } = await supabase
+      // Step 1: 只 query venue_drafts，唔做 embed / join / 第二次 query。
+      // 之前 2-query 版本有時會 throw ByteString error（character at index 19，
+      // 真正 root cause 仲未搵到 — 可能係 Vercel V8 同 supabase-js .in() 嘅
+      // 某個 interaction）。先用最簡單版本，等 /review 恢復運作先。
+      const { data, error } = await supabase
         .from("venue_drafts")
         .select("*")
         .eq("status", status)
         .order("created_at", { ascending: false });
 
-      if (draftsError) {
-        throw new Error(draftsError.message);
+      if (error) {
+        throw new Error(error.message);
       }
 
-      const list = (drafts ?? []) as ReviewDraftRow[];
-
-      // Step 2: 一次過攞晒相關 intake_items（避開 PostgREST embed，
-      // embed 需要 schema cache 偵測到 FK relationship，加咗 RLS 之後
-      // 有時會失效，所以改用兩次 query + JS 層 join）。
-      const intakeIds = [
-        ...new Set(
-          list
-            .map((d) => d.intake_item_id)
-            .filter((id): id is string => typeof id === "string"),
-        ),
-      ];
-
-      const intakeById = new Map<
-        string,
-        NonNullable<ReviewDraftRow["intake"]>
-      >();
-      if (intakeIds.length > 0) {
-        const { data: intakes, error: intakesError } = await supabase
-          .from("intake_items")
-          .select(
-            "id, source_label, source_url, raw_content, received_at, photo_file_ids",
-          )
-          .in("id", intakeIds);
-
-        if (intakesError) {
-          throw new Error(intakesError.message);
-        }
-
-        for (const i of intakes ?? []) {
-          intakeById.set(i.id, {
-            source_label: i.source_label,
-            source_url: i.source_url,
-            raw_content: i.raw_content,
-            received_at: i.received_at,
-            photo_file_ids: i.photo_file_ids,
-          });
-        }
-      }
-
-      // Step 3: JS 層 join
-      return list.map((d) => ({
+      // intake 暫時 null，唔阻住 page render。
+      // 之後可以用 RPC / raw SQL 兜返。
+      return ((data ?? []) as ReviewDraftRow[]).map((d) => ({
         ...d,
-        intake: d.intake_item_id
-          ? intakeById.get(d.intake_item_id) ?? null
-          : null,
+        intake: null,
       }));
     },
 
