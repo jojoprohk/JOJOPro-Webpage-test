@@ -32,14 +32,9 @@ export async function GET(request: NextRequest) {
       { status: 503 },
     );
   }
-  try {
-    const drafts = await repository.listDrafts(status);
-    return NextResponse.json({ ok: true, drafts });
-  } catch (error) {
-    console.error("[review-drafts] list failed:", error);
-    return NextResponse.json(
-      { ok: false, error: "list_failed" },
-      { status: 500 },
-    );
-  }
+  // TEMPORARY hardcoded empty list — isolates page-render path from data path.
+  // If /review now renders the login form (no 500), the issue was purely in the
+  // data fetching code path. We can re-enable repository.listDrafts afterwards.
+  console.log("[review-drafts] returning hardcoded empty list (data path bypassed)");
+  return NextResponse.json({ ok: true, drafts: [] });
 }
