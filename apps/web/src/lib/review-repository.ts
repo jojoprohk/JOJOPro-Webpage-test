@@ -95,6 +95,7 @@ export function buildDraftUpdate(
 
 export interface ReviewDraftRow {
   id: string;
+  intake_item_id: string;
   status: string;
   title: string;
   district: string | null;
@@ -146,18 +147,64 @@ export function createReviewRepository(
 ): ReviewRepository {
   return {
     async listDrafts(status) {
-      const { data, error } = await supabase
+      // Step 1: 攞 drafts
+      const { data: drafts, error: draftsError } = await supabase
         .from("venue_drafts")
-        .select(
-          "*, intake:intake_items(source_label, source_url, raw_content, received_at, photo_file_ids)",
-        )
+        .select("*")
         .eq("status", status)
         .order("created_at", { ascending: false });
 
-      if (error) {
-        throw new Error(error.message);
+      if (draftsError) {
+        throw new Error(draftsError.message);
       }
-      return (data ?? []) as ReviewDraftRow[];
+
+      const list = (drafts ?? []) as ReviewDraftRow[];
+
+      // Step 2: 一次過攞晒相關 intake_items（避開 PostgREST embed，
+      // embed 需要 schema cache 偵測到 FK relationship，加咗 RLS 之後
+      // 有時會失效，所以改用兩次 query + JS 層 join）。
+      const intakeIds = [
+        ...new Set(
+          list
+            .map((d) => d.intake_item_id)
+            .filter((id): id is string => typeof id === "string"),
+        ),
+      ];
+
+      const intakeById = new Map<
+        string,
+        NonNullable<ReviewDraftRow["intake"]>
+      >();
+      if (intakeIds.length > 0) {
+        const { data: intakes, error: intakesError } = await supabase
+          .from("intake_items")
+          .select(
+            "id, source_label, source_url, raw_content, received_at, photo_file_ids",
+          )
+          .in("id", intakeIds);
+
+        if (intakesError) {
+          throw new Error(intakesError.message);
+        }
+
+        for (const i of intakes ?? []) {
+          intakeById.set(i.id, {
+            source_label: i.source_label,
+            source_url: i.source_url,
+            raw_content: i.raw_content,
+            received_at: i.received_at,
+            photo_file_ids: i.photo_file_ids,
+          });
+        }
+      }
+
+      // Step 3: JS 層 join
+      return list.map((d) => ({
+        ...d,
+        intake: d.intake_item_id
+          ? intakeById.get(d.intake_item_id) ?? null
+          : null,
+      }));
     },
 
     async updateDraft(id, row) {
