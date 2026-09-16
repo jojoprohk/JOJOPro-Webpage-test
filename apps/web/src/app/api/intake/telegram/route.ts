@@ -105,27 +105,31 @@ export async function POST(request: Request) {
       if (allowed.length === 0 || allowed.includes(earlyParse.chatId)) {
         const chatId = earlyParse.chatId;
         console.log(`[intake-route] result.status=${result.status} venueCount=${result.venueCount} reason=${result.reason ?? "(none)"}`);
-        if (result.status === "saved" && (result.venueCount ?? 0) > 0) {
-          console.log("[intake-route] sending ✅ reply");
-          void sendTelegramReply(
-            chatId,
-            `✅ 已儲存 ${result.venueCount} 筆場地草稿（待審核），去 /review 就可以審。`,
-          );
-        } else if (result.status === "skipped") {
-          console.log("[intake-route] sending 📭 reply");
-          // 將 AI 嘅實際原因加入回覆，用戶可以即時理解點解判斷唔係場地。
-          const reason = result.reason
-            ? `\n\n原因：${result.reason}`
-            : "";
-          void sendTelegramReply(
-            chatId,
-            `📭 收到呢批資料，但睇唔落係場地招租資訊，已標記待你確認。${reason}`,
-          );
-        } else if (result.status === "forbidden") {
-          console.log("[intake-route] sending 🚫 reply");
-          void sendTelegramReply(chatId, "🚫 呢個 chat 未獲授權。");
-        } else {
-          console.log(`[intake-route] no matching reply branch for status=${result.status}`);
+        try {
+          if (result.status === "saved" && (result.venueCount ?? 0) > 0) {
+            console.log("[intake-route] sending ✅ reply");
+            await sendTelegramReply(
+              chatId,
+              `✅ 已儲存 ${result.venueCount} 筆場地草稿（待審核），去 /review 就可以審。`,
+            );
+          } else if (result.status === "skipped") {
+            console.log("[intake-route] sending 📭 reply");
+            // 將 AI 嘅實際原因加入回覆，用戶可以即時理解點解判斷唔係場地。
+            const reason = result.reason
+              ? `\n\n原因：${result.reason}`
+              : "";
+            await sendTelegramReply(
+              chatId,
+              `📭 收到呢批資料，但睇唔落係場地招租資訊，已標記待你確認。${reason}`,
+            );
+          } else if (result.status === "forbidden") {
+            console.log("[intake-route] sending 🚫 reply");
+            await sendTelegramReply(chatId, "🚫 呢個 chat 未獲授權。");
+          } else {
+            console.log(`[intake-route] no matching reply branch for status=${result.status}`);
+          }
+        } catch (replyErr) {
+          console.error("[intake-route] final reply delivery failed:", replyErr);
         }
       }
     }

@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { REVIEW_COOKIE_NAME, isSessionValid } from "../../../../lib/review-auth";
+import { createSupabaseServiceClient } from "../../../../lib/venue-repository";
+import { createReviewRepository } from "../../../../lib/review-repository";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,9 +21,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "bad_status" }, { status: 400 });
   }
 
-  // TEMPORARY: hardcoded empty list. NO supabase-js call at all in this route,
-  // so the ByteString error cannot fire here. If /review still 500s after this
-  // commit, the bug is in /review page itself, not in the API.
-  console.log("[review-drafts] hardcoded empty list, supabase bypassed entirely");
-  return NextResponse.json({ ok: true, drafts: [] });
+  // Re-enabled after the PGRST125 (literal-comma) + ByteString (non-ASCII env
+  // var) fixes landed. We go through the raw-fetch path inside
+  // review-repository.listDrafts so we never touch supabase-js Node 18 fetch.
+  try {
+    const repository = createReviewRepository(createSupabaseServiceClient());
+    const drafts = await repository.listDrafts(status);
+    return NextResponse.json({ ok: true, drafts });
+  } catch (e) {
+    console.error("[review-drafts] list failed:", e);
+    return NextResponse.json(
+      { ok: false, error: e instanceof Error ? e.message : "list_failed" },
+      { status: 500 },
+    );
+  }
 }
