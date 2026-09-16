@@ -14,10 +14,25 @@ function stripLoneSurrogates(value: string): string {
   return value.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "");
 }
 
-// 遞迴清理即將寫入資料庫嘅 payload：字串清孤立代理，陣列/物件照走。
+// Replace Unicode punctuation that breaks Node fetch URL/Headers construction
+// (ByteString error: char value > 255). Keeps CJK characters intact so Chinese
+// venue data is preserved.
+function normalizePunctuation(value: string): string {
+  return value
+    .replace(/[→⇒]/g, "->")
+    .replace(/[←⇐]/g, "<-")
+    .replace(/[‘’‚‘]/g, "'")
+    .replace(/[“”„]/g, '"')
+    .replace(/–/g, "-")
+    .replace(/—/g, "--")
+    .replace(/…/g, "...");
+}
+
+// 遞迴清理即將寫入資料庫嘅 payload：字串清孤立代理 + 正規化標點，
+// 陣列/物件照走。
 function sanitizeForInsert<T>(value: T): T {
   if (typeof value === "string") {
-    return stripLoneSurrogates(value) as unknown as T;
+    return normalizePunctuation(stripLoneSurrogates(value)) as unknown as T;
   }
   if (Array.isArray(value)) {
     return value.map((item) => sanitizeForInsert(item)) as unknown as T;
