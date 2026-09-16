@@ -116,26 +116,107 @@ export function createListingRepository(
 ): ListingRepository {
   return {
     async listApprovedListings() {
-      const { data, error } = await supabase
-        .from("venue_drafts")
-        .select(
-          "id, title, district, venue_name, area_type, start_date, end_date, session_dates, " +
-          "price_text, price_amount_hkd, price_unit, booth_size_text, contact_text, " +
-            "contact_whatsapp_link, has_aircon, photos, is_prime_spot, is_cart_spot, allows_food, " +
-            "allows_dry_goods, allows_beauty, allows_service, requires_product_approval, " +
-            "is_urgent, is_discounted, summary, report_count, last_reviewed_at, created_at, " +
-            "is_featured, featured_at, is_link_reit, " +
-            "intake:intake_items(source_label, source_url)",
-        )
-        .eq("status", "approved")
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        throw new Error(error.message);
+      // 跳過 supabase-js：用 raw fetch + URLSearchParams，等 Node 18 fetch
+      // 唔會因為某啲 column value（例如舊 row 入面嘅 →）而 throw ByteString
+      // error。Same trick as review-repository.listDrafts (commit 8a89d38).
+      const supabaseUrl = process.env.SUPABASE_URL || "";
+      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+      if (!supabaseUrl || !serviceRoleKey) {
+        throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
       }
-      return ((data ?? []) as unknown as ApprovedListingRow[]).map(
-        mapRowToPublicListing,
+
+      // Defensive: env vars should be ASCII; if anyone pasted non-ASCII into
+      // a secret we still want the page to load (truncated key is better
+      // than crashing the whole home page).
+      const asciiKey = serviceRoleKey.replace(/[^\x00-\x7f]/g, "?");
+
+      const cleanBase = supabaseUrl.replace(/\/$/, "");
+
+      // Query 1: approved venue_drafts (most recent first). No embed.
+      const draftsParams = new URLSearchParams({
+        select:
+          "id,title,district,venue_name,area_type,start_date,end_date," +
+          "session_dates,price_text,price_amount_hkd,price_unit,booth_size_text," +
+          "contact_text,contact_whatsapp_link,has_aircon,photos,is_prime_spot," +
+          "is_cart_spot,allows_food,allows_dry_goods,allows_beauty,allows_service," +
+          "requires_product_approval,is_urgent,is_discounted,summary,report_count," +
+          "last_reviewed_at,created_at,is_featured,featured_at,is_link_reit,intake_item_id",
+        status: "eq.approved",
+        order: "created_at.desc",
+      });
+      const draftsUrl = `${cleanBase}/rest/v1/venue_drafts?${draftsParams.toString()}`;
+      const draftsRes = await fetch(draftsUrl, {
+        headers: {
+          apikey: asciiKey,
+          Authorization: `Bearer ${asciiKey}`,
+        },
+        cache: "no-store",
+      });
+      if (!draftsRes.ok) {
+        const body = await draftsRes.text().catch(() => "");
+        throw new Error(`Supabase ${draftsRes.status}: ${body.slice(0, 200)}`);
+      }
+      const drafts = (await draftsRes.json()) as Array<
+        Omit<ApprovedListingRow, "intake"> & { intake_item_id: string | null }
+      >;
+      if (drafts.length === 0) return [];
+
+      // Query 2: intake_items 對應返各 draft 嘅 source_label / source_url。
+      // Single round trip 用 in.() filter；避免逐個 query N+1。
+      const intakeIds = Array.from(
+        new Set(
+          drafts
+            .map((d) => d.intake_item_id)
+            .filter((id): id is string => typeof id === "string" && id.length > 0),
+        ),
       );
+      const intakeById = new Map<
+        string,
+        { source_label: string; source_url: string | null }
+      >();
+      if (intakeIds.length > 0) {
+        const intakeParams = new URLSearchParams({
+          select: "id,source_label,source_url",
+          id: `in.(${intakeIds.join(",")})`,
+        });
+        const intakeUrl = `${cleanBase}/rest/v1/intake_items?${intakeParams.toString()}`;
+        const intakeRes = await fetch(intakeUrl, {
+          headers: {
+            apikey: asciiKey,
+            Authorization: `Bearer ${asciiKey}`,
+          },
+          cache: "no-store",
+        });
+        if (intakeRes.ok) {
+          const intakes = (await intakeRes.json()) as Array<{
+            id: string;
+            source_label: string;
+            source_url: string | null;
+          }>;
+          for (const it of intakes) {
+            intakeById.set(it.id, {
+              source_label: it.source_label,
+              source_url: it.source_url,
+            });
+          }
+        }
+      }
+
+      return drafts.map((d) => {
+        const intakeMeta = d.intake_item_id
+          ? intakeById.get(d.intake_item_id) ?? null
+          : null;
+        const row: ApprovedListingRow = {
+          ...d,
+          intake: intakeMeta
+            ? {
+                source_label: intakeMeta.source_label,
+                source_url: intakeMeta.source_url,
+              }
+            : null,
+        };
+        return mapRowToPublicListing(row);
+      });
     },
 
     async reportListing(id, nowIso) {
