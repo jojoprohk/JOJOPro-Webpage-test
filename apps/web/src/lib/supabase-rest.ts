@@ -32,8 +32,12 @@ function readCreds(): { base: string; key: string } {
   // Defensive: scrub non-ASCII bytes from the secret. A truncated key is
   // recoverable; a 500 is not.
   const asciiKey = key.replace(/[^\x00-\x7f]/g, "?");
-  const base = url.replace(/\/$/, "");
-  return { base, key: asciiKey };
+  // Normalize base to "<scheme>://<host>". Strip trailing slash, and also
+  // any "/rest/v1" suffix in case the operator pasted a PostgREST-style URL
+  // instead of the project URL.
+  let cleaned = url.replace(/\/$/, "");
+  cleaned = cleaned.replace(/\/rest\/v1\/?$/, "");
+  return { base: cleaned, key: asciiKey };
 }
 
 // Raw Supabase REST call. `path` should begin with "/" (e.g. "/rest/v1/venue_drafts?...").
@@ -50,7 +54,12 @@ export async function supabaseRest(
   if (opts.body !== undefined && typeof opts.body === "string" && !headers["Content-Type"]) {
     headers["Content-Type"] = "application/json";
   }
-  return fetch(`${base}${path}`, {
+  const fullUrl = `${base}${path}`;
+  // Diagnostic: surface the URL we are about to fetch. Critical for
+  // debugging PGRST125 (invalid path) and 401 (wrong key) without
+  // needing to attach a debugger.
+  console.log(`[supabase-rest] ${opts.method ?? "GET"} ${fullUrl}`);
+  return fetch(fullUrl, {
     method: opts.method ?? "GET",
     headers,
     body: opts.body,
