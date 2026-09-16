@@ -329,19 +329,31 @@ export function createLlmVenueCompleter(): JsonCompleter {
     // model first, then a list of known stable aliases. The first one that
     // returns 2xx is used; if every candidate returns 4xx "Model not found"
     // we throw the last error so the caller surfaces a real failure.
-    // Stage 1 launch: text-only. xAI retired every vision model name for
-    // this account (grok-2-vision, -latest, grok-3/4-vision, grok-vision
-    // all 400 Model not found), so we run on Grok text models and the
-    // caller drops image content below.
+    // Live model chain. Try the env-configured primary first, then every
+    // model the configured provider actually exposes (queried via /models).
+    // Works for any OpenAI-compatible provider (xAI, MiniMax, Groq, OpenAI,
+    // etc) without hardcoding model names. If /models is unreachable we
+    // fall back to a small text-model list so text-only intake still works.
+    let liveModels: string[] = [];
+    try {
+      const list = await client.models.list();
+      liveModels = list.data.map((m) => m.id).sort();
+      console.log(
+        `[llm-completer] /models returned ${liveModels.length}: [${liveModels.slice(0, 50).join(",")}${liveModels.length > 50 ? "..." : ""}]`,
+      );
+    } catch (listErr) {
+      const msg = listErr instanceof Error ? listErr.message : String(listErr);
+      console.log(`[llm-completer] /models failed: ${msg}`);
+    }
+    const textFallback = [
+      "grok-3",
+      "grok-3-latest",
+      "grok-2",
+      "grok-2-latest",
+      "grok-4",
+    ];
     const modelCandidates = Array.from(
-      new Set([
-        model,
-        "grok-3",
-        "grok-3-latest",
-        "grok-2",
-        "grok-2-latest",
-        "grok-4",
-      ]),
+      new Set([model, ...liveModels, ...textFallback]),
     );
 
     // Diagnostic: surface resolved config so Vercel logs make the actual
