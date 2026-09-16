@@ -14,19 +14,34 @@ function stripLoneSurrogates(value: string): string {
   return value.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "");
 }
 
-// Replace Unicode punctuation that breaks Node fetch URL/Headers construction
-// (ByteString error: char value > 255). Keeps CJK characters intact so Chinese
-// venue data is preserved.
+// Normalize text before it is handed to supabase-js. The Node 18 fetch
+// implementation refuses to build a URL/Headers/Body from any string that
+// contains a codepoint greater than U+00FF ("Cannot convert argument to a
+// ByteString ... value of 8594 ..."). Grok routinely emits Unicode arrows,
+// smart quotes, em/en dashes, bullets and other punctuation in JSON.
+// Two passes:
+//   1. Replace common Unicode punctuation with ASCII equivalents so the
+//      human-readable text is preserved (e.g. "HKD 500 -> 700" rather
+//      than "HKD 500 ? 700").
+//   2. Catch-all: replace any remaining codepoint > U+00FF that is not
+//      part of a CJK / Japanese / Korean block we want to keep, with "?"
+//      so the payload is guaranteed latin1-clean. This protects against
+//      future Grok additions (greek letters, math symbols, etc.) without
+//      us having to enumerate every offending glyph.
 function normalizePunctuation(value: string): string {
   return value
-    .replace(/[→⇒]/g, "->")
-    .replace(/[←⇐]/g, "<-")
-    .replace(/[‘’‚‘]/g, "'")
-    .replace(/[“”„]/g, '"')
-    .replace(/–/g, "-")
-    .replace(/—/g, "--")
-    .replace(/…/g, "...");
+    .replace(/[\u2192\u21D2\u2794\u279C\u279D\u279E\u279F\u27A1\u27A4-\u27B0\u27B2-\u27BF]/g, "->")
+    .replace(/[\u2190\u21D0\u2798\u2799\u279A\u279B]/g, "<-")
+    .replace(/[\u2018\u2019\u201A\u201B]/g, "'")
+    .replace(/[\u201C\u201D\u201E]/g, '"')
+    .replace(/[\u2013\u2212]/g, "-")
+    .replace(/[\u2014]/g, "--")
+    .replace(/[\u2026]/g, "...")
+    .replace(/[\u00B7\u2022\u2023\u2043\u204C\u204D]/g, "*")
+    .replace(/[\u2190-\u21FF\u2900-\u297F\u2B00-\u2BFF\u27F0-\u27FF]/g, "->")
+    .replace(/[^\x00-\xFF\u4E00-\u9FFF\u3400-\u4DBF\u3040-\u309F\u30A0-\u30FF\uAC00-\uD7AF]/g, "?");
 }
+
 
 // 遞迴清理即將寫入資料庫嘅 payload：字串清孤立代理 + 正規化標點，
 // 陣列/物件照走。
