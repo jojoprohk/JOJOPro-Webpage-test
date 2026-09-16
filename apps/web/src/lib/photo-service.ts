@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { expectOk, supabaseRest } from "./supabase-rest.js";
 import { resolveVenuePhotos, type AreaType, type VenuePhoto } from "@jojopro/ai";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -67,21 +68,20 @@ async function readStockPhoto(src: string): Promise<{ buffer: Buffer; mimeType: 
 
 // 讀取草稿嘅展示相列表（向後相容：photos 空 → 按 area_type fallback stock）。
 async function fetchDraftPhotos(
-  supabase: SupabaseClient,
+  _supabase: SupabaseClient, // kept for signature compat; not used after de-supabase-js
   draftId: string,
   opts: { requireApproved: boolean },
 ): Promise<{ photos: VenuePhoto[] }> {
-  let query = supabase
-    .from("venue_drafts")
-    .select("id, status, area_type, photos")
-    .eq("id", draftId);
-  if (opts.requireApproved) {
-    query = query.eq("status", "approved");
+  // Bypass supabase-js (Node 18 undici ByteString bug).
+  const filters = [`id=eq.${encodeURIComponent(draftId)}`, "select=id,status,area_type,photos"];
+  if (opts.requireApproved) filters.push("status=eq.approved");
+  const res = await supabaseRest(`/rest/v1/venue_drafts?${filters.join("&")}`);
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new PhotoError("upstream_failed", `${res.status} ${body.slice(0, 200)}`);
   }
-  const { data, error } = await query.maybeSingle<DraftPhotosRow>();
-  if (error) {
-    throw new PhotoError("upstream_failed", error.message);
-  }
+  const rows = (await res.json()) as DraftPhotosRow[];
+  const data = rows[0];
   if (!data) {
     throw new PhotoError("not_found", "draft not found");
   }
@@ -164,15 +164,15 @@ export async function getIntakePhoto(
     throw new PhotoError("not_found", "bad index");
   }
 
-  const { data, error } = await supabase
-    .from("intake_items")
-    .select("photo_file_ids")
-    .eq("id", intakeId)
-    .maybeSingle<PhotoFileIdsRow>();
-
-  if (error) {
-    throw new PhotoError("upstream_failed", error.message);
+  const res = await supabaseRest(
+    `/rest/v1/intake_items?id=eq.${encodeURIComponent(intakeId)}&select=photo_file_ids`,
+  );
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new PhotoError("upstream_failed", `${res.status} ${body.slice(0, 200)}`);
   }
+  const rows = (await res.json()) as PhotoFileIdsRow[];
+  const data = rows[0];
   const fileIds = data?.photo_file_ids ?? [];
   const fileId = fileIds[index];
   if (!fileId) {
@@ -200,24 +200,27 @@ const MANUAL_KEY_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function readManualPhoto(
-  supabase: SupabaseClient,
+  _supabase: SupabaseClient, // kept for signature compat
   storageKey: string,
 ): Promise<{ buffer: Buffer; mimeType: string }> {
   if (!MANUAL_KEY_RE.test(storageKey)) {
     throw new PhotoError("not_found", "bad manual storage key");
   }
-  const { data, error } = await supabase.storage
-    .from(MANUAL_BUCKET)
-    .download(storageKey);
-  if (error || !data) {
-    throw new PhotoError(
-      "missing_storage",
-      error?.message ?? "manual photo not found",
-    );
+  // Bypass supabase-js storage client. Supabase Storage REST:
+  // GET /storage/v1/object/{bucket}/{key}
+  const res = await supabaseRest(
+    `/storage/v1/object/${MANUAL_BUCKET}/${encodeURIComponent(storageKey)}`,
+  );
+  if (!res.ok) {
+    const status = res.status === 404 ? 404 : res.status;
+    if (status === 404) {
+      throw new PhotoError("missing_storage", "manual photo not found");
+    }
+    throw new PhotoError("upstream_failed", `${status} storage read failed`);
   }
-  const arrayBuffer = await data.arrayBuffer();
+  const arrayBuffer = await res.arrayBuffer();
   return {
     buffer: Buffer.from(arrayBuffer),
-    mimeType: data.type || "image/jpeg",
+    mimeType: res.headers.get("content-type") || "image/jpeg",
   };
 }

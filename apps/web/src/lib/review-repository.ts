@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { expectOk, supabaseRest } from "./supabase-rest.js";
 
 export type ReviewAction = "approve" | "reject" | "save" | "toggle_featured";
 
@@ -206,13 +207,12 @@ export function createReviewRepository(
     },
 
     async updateDraft(id, row) {
-      const { error } = await supabase
-        .from("venue_drafts")
-        .update(row)
-        .eq("id", id);
-      if (error) {
-        throw new Error(error.message);
-      }
+      // Bypass supabase-js (Node 18 undici ByteString bug). Raw PATCH.
+      const res = await supabaseRest(
+        `/rest/v1/venue_drafts?id=eq.${encodeURIComponent(id)}`,
+        { method: "PATCH", body: JSON.stringify(row) },
+      );
+      await expectOk(res, "updateDraft");
     },
   };
 }

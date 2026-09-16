@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { expectOk, supabaseRest } from "./supabase-rest.js";
 import { resolveVenuePhotos, type AreaType, type VenuePhoto } from "@jojopro/ai";
 import type { PublicListing } from "./listing-types.js";
 
@@ -222,14 +223,20 @@ export function createListingRepository(
     async reportListing(id, nowIso) {
       // 原子遞增（SQL function，見 migration 202609020001）。
       // 只對 approved 行生效；搵唔到會回傳 null。
-      const { data, error } = await supabase.rpc("increment_report_count", {
-        listing_id: id,
-        reported_at: nowIso,
-      });
-
-      if (error) {
-        throw new Error(error.message);
+      // Bypass supabase-js (Node 18 undici ByteString bug). POST /rest/v1/rpc/<fn>.
+      const res = await supabaseRest(
+        "/rest/v1/rpc/increment_report_count",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ listing_id: id, reported_at: nowIso }),
+        },
+      );
+      if (!res.ok) {
+        await expectOk(res, "reportListing");
       }
+      // Supabase RPC returns the JSON result directly (single value or null).
+      const data = await res.json().catch(() => null);
       return data !== null && data !== undefined;
     },
 
@@ -238,15 +245,18 @@ export function createListingRepository(
       const update = on
         ? { is_featured: true, featured_at: nowIso }
         : { is_featured: false, featured_at: null };
-      const { data, error } = await supabase
-        .from("venue_drafts")
-        .update(update)
-        .eq("id", id)
-        .eq("status", "approved")
-        .select("id");
-      if (error) {
-        throw new Error(error.message);
-      }
+      // Bypass supabase-js. PATCH with Prefer: return=representation so we
+      // can read back the updated id.
+      const res = await supabaseRest(
+        `/rest/v1/venue_drafts?id=eq.${encodeURIComponent(id)}&status=eq.approved&select=id`,
+        {
+          method: "PATCH",
+          headers: { Prefer: "return=representation" },
+          body: JSON.stringify(update),
+        },
+      );
+      await expectOk(res, "setFeatured");
+      const data = (await res.json()) as Array<{ id: string }>;
       return Array.isArray(data) && data.length > 0;
     },
   };

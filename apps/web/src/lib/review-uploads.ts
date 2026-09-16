@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { expectOk, supabaseRest } from "./supabase-rest.js";
 
 // 審核頁手動上傳（候補相片、場地相關圖）。
 // - 限制大小：相片太細冇意義、太大會爆 Vercel 4.5MB request limit。
@@ -75,16 +76,23 @@ export async function uploadManualPhoto(
 
   const storageKey = randomUUID();
   const arrayBuffer = await file.arrayBuffer();
-  const { error } = await supabase.storage
-    .from(MANUAL_PHOTO_BUCKET)
-    .upload(storageKey, arrayBuffer, {
-      contentType: v.mime,
-      cacheControl: "31536000, immutable",
-      upsert: false,
-    });
-
-  if (error) {
-    return { status: 502, reason: error.message };
+  // Bypass supabase-js storage client. Supabase Storage REST upload:
+  // POST /storage/v1/object/{bucket}/{key} with the raw binary body.
+  const res = await supabaseRest(
+    `/storage/v1/object/${MANUAL_PHOTO_BUCKET}/${encodeURIComponent(storageKey)}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": v.mime,
+        "Cache-Control": "31536000, immutable",
+        "x-upsert": "false",
+      },
+      body: new Uint8Array(arrayBuffer),
+    },
+  );
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    return { status: 502, reason: `storage upload ${res.status}: ${body.slice(0, 200)}` };
   }
   return { storageKey, mime: v.mime, bytes: file.size };
 }
