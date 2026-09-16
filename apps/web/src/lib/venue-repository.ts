@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { expectOk, supabaseRest } from "./supabase-rest.js";
 import type { IntakeInput, ParseResult, VenueDraftEntry } from "@jojopro/ai";
 import { buildEntryPhotos } from "./draft-photos.js";
 
@@ -120,24 +121,30 @@ export function createVenueRepository(
   supabase: SupabaseClient,
 ): VenueRepository {
   async function insertIntake(input: IntakeInput) {
-    const { data: intakeData, error: intakeError } = await supabase
-      .from("intake_items")
-      .insert(sanitizeForInsert({
-        source_type: input.sourceType,
-        source_label: input.sourceLabel,
-        source_url: input.sourceUrl,
-        raw_content: input.rawContent,
-        received_at: input.receivedAt,
-        photo_file_ids: input.photoFileIds ?? [],
-      }))
-      .select("id")
-      .single<{ id: string }>();
-
-    if (intakeError || !intakeData) {
-      throw new Error(intakeError?.message ?? "Failed to save intake item.");
+    // Bypass supabase-js (Node 18 undici ByteString bug). Raw POST with
+    // Prefer: return=representation so we can read back the inserted id.
+    const payload = sanitizeForInsert({
+      source_type: input.sourceType,
+      source_label: input.sourceLabel,
+      source_url: input.sourceUrl,
+      raw_content: input.rawContent,
+      received_at: input.receivedAt,
+      photo_file_ids: input.photoFileIds ?? [],
+    });
+    const res = await supabaseRest("/rest/v1/intake_items", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify(payload),
+    });
+    await expectOk(res, "insertIntake");
+    const rows = (await res.json()) as Array<{ id: string }>;
+    if (!rows[0]) {
+      throw new Error("Failed to save intake item: empty response");
     }
-
-    return intakeData;
+    return rows[0];
   }
 
   return {
@@ -148,13 +155,19 @@ export function createVenueRepository(
         mapVenueDraftToRow(intakeData.id, entry, photoFileIds),
       );
 
-      const { data: draftData, error: draftError } = await supabase
-        .from("venue_drafts")
-        .insert(sanitizeForInsert(rows))
-        .select("id");
-
-      if (draftError || !draftData) {
-        throw new Error(draftError?.message ?? "Failed to save venue drafts.");
+      // Bypass supabase-js for the same ByteString reason as insertIntake.
+      const draftRes = await supabaseRest("/rest/v1/venue_drafts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Prefer: "return=representation",
+        },
+        body: JSON.stringify(sanitizeForInsert(rows)),
+      });
+      await expectOk(draftRes, "saveIntakeAndDrafts");
+      const draftData = (await draftRes.json()) as Array<{ id: string }>;
+      if (!Array.isArray(draftData) || draftData.length === 0) {
+        throw new Error("Failed to save venue drafts: empty response");
       }
 
       return {
