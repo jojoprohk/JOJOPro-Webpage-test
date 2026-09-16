@@ -253,7 +253,7 @@ export function createLlmVenueCompleter(): JsonCompleter {
 
   const baseURL =
     process.env.LLM_BASE_URL || "https://api.groq.com/openai/v1";
-  const model = process.env.LLM_MODEL || "llama-3.3-70b-versatile";
+  const model = process.env.LLM_MODEL || "grok-2-vision";
 
   const client = new OpenAI({
     apiKey,
