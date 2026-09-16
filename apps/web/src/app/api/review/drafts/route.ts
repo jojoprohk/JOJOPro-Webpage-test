@@ -1,10 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { REVIEW_COOKIE_NAME, isSessionValid } from "../../../../lib/review-auth";
-import {
-  createReviewRepository,
-} from "../../../../lib/review-repository";
-import { createSupabaseServiceClient } from "../../../../lib/venue-repository";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,18 +19,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "bad_status" }, { status: 400 });
   }
 
-  let repository;
-  try {
-    repository = createReviewRepository(createSupabaseServiceClient());
-  } catch {
-    return NextResponse.json(
-      { ok: false, error: "server_not_configured" },
-      { status: 503 },
-    );
-  }
-  // TEMPORARY hardcoded empty list — isolates page-render path from data path.
-  // If /review now renders the login form (no 500), the issue was purely in the
-  // data fetching code path. We can re-enable repository.listDrafts afterwards.
-  console.log("[review-drafts] returning hardcoded empty list (data path bypassed)");
+  // TEMPORARY: hardcoded empty list. NO supabase-js call at all in this route,
+  // so the ByteString error cannot fire here. If /review still 500s after this
+  // commit, the bug is in /review page itself, not in the API.
+  console.log("[review-drafts] hardcoded empty list, supabase bypassed entirely");
   return NextResponse.json({ ok: true, drafts: [] });
 }
