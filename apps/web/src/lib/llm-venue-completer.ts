@@ -252,8 +252,8 @@ export function createLlmVenueCompleter(): JsonCompleter {
   }
 
   const baseURL =
-    process.env.LLM_BASE_URL || "https://api.groq.com/openai/v1";
-  const model = process.env.LLM_MODEL || "grok-2-vision";
+    process.env.LLM_BASE_URL || "https://api.deepseek.com";
+  const model = process.env.LLM_MODEL || "deepseek-chat";
 
   const client = new OpenAI({
     apiKey,
@@ -345,7 +345,17 @@ export function createLlmVenueCompleter(): JsonCompleter {
       const msg = listErr instanceof Error ? listErr.message : String(listErr);
       console.log(`[llm-completer] /models failed: ${msg}`);
     }
+    // Cross-provider fallback. Order roughly reflects "most likely to
+    // succeed first" — DeepSeek's chat is the cheapest reliable default,
+    // xAI grok-3 is a known stable alias, then everything else. The env
+    // primary is always tried first regardless of order here.
     const textFallback = [
+      // DeepSeek (OpenAI-compatible). Current prod model names.
+      "deepseek-chat",
+      "deepseek-flash",
+      "deepseek-v4-pro",
+      "deepseek-reasoner",
+      // xAI / Grok legacy aliases (kept for roll-back).
       "grok-3",
       "grok-3-latest",
       "grok-2",
