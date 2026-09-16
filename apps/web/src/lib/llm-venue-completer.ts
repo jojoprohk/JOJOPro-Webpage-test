@@ -331,6 +331,13 @@ export function createLlmVenueCompleter(): JsonCompleter {
       ]),
     );
 
+    // Diagnostic: surface resolved config so Vercel logs make the actual
+    // LLM state observable. Key prefix is only the first 4 chars — full key
+    // is never logged.
+    console.log(
+      `[llm-completer] config baseURL=${baseURL} primary=${model} keyPrefix=${apiKey.slice(0, 4)}*** keyLen=${apiKey.length} candidates=[${modelCandidates.join(",")}]`,
+    );
+
     let completion;
     let lastErr: unknown;
     for (const candidate of modelCandidates) {
@@ -341,15 +348,14 @@ export function createLlmVenueCompleter(): JsonCompleter {
           temperature: 0,
           response_format: { type: "json_object" },
         });
-        if (candidate !== model) {
-          console.log(
-            `[llm-completer] primary '${model}' unavailable, used fallback '${candidate}'`,
-          );
-        }
+        console.log(`[llm-completer] candidate '${candidate}' OK`);
         break;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         const status = (err as { status?: number })?.status;
+        console.log(
+          `[llm-completer] candidate '${candidate}' FAIL status=${status ?? "?"} msg="${msg.slice(0, 120)}"`,
+        );
         if (/model not found/i.test(msg) || status === 400 || status === 404) {
           lastErr = err;
           continue;
@@ -358,6 +364,9 @@ export function createLlmVenueCompleter(): JsonCompleter {
       }
     }
     if (!completion) {
+      console.log(
+        `[llm-completer] all ${modelCandidates.length} candidates failed`,
+      );
       throw lastErr instanceof Error
         ? lastErr
         : new Error(`All LLM candidates failed: ${modelCandidates.join(", ")}`);
