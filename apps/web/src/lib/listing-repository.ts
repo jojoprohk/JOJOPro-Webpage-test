@@ -145,8 +145,12 @@ export function createListingRepository(
         "is_cart_spot,allows_food,allows_dry_goods,allows_beauty,allows_service," +
         "requires_product_approval,is_urgent,is_discounted,summary,report_count," +
         "last_reviewed_at,created_at,is_featured,featured_at,is_link_reit,intake_item_id";
+      // URL grammar allows literal ',' in query values (sub-delim). DO NOT
+      // run the select clause through encodeURIComponent — it percent-encodes
+      // ',' to %2C and PostgREST's path parser then rejects the request
+      // with PGRST125. Same reasoning for status / order.
       const draftsQuery =
-        `select=${encodeURIComponent(draftsSelect)}` +
+        `select=${draftsSelect}` +
         `&status=eq.approved` +
         `&order=created_at.desc`;
       const draftsRes = await supabaseRest(
@@ -174,11 +178,13 @@ export function createListingRepository(
         { source_label: string; source_url: string | null }
       >();
       if (intakeIds.length > 0) {
-        // Same URLSearchParams caveat as Query 1: build the query string
-        // by hand so the in.(uuid1,uuid2,...) filter keeps literal commas.
+        // Same caveat as Query 1: keep literal commas in the select and
+        // in.(...) filter. encodeURIComponent would turn them into %2C and
+        // PostgREST would answer 404 PGRST125. UUIDs are ASCII so they do
+        // not need escaping; encodeURIComponent is a no-op on them.
         const intakeQuery =
-          `select=${encodeURIComponent("id,source_label,source_url")}` +
-          `&id=in.(${intakeIds.map((id) => encodeURIComponent(id)).join(",")})`;
+          `select=id,source_label,source_url` +
+          `&id=in.(${intakeIds.join(",")})`;
         const intakeRes = await supabaseRest(
           `/rest/v1/intake_items?${intakeQuery}`,
         );
