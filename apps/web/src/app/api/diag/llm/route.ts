@@ -14,7 +14,11 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const provided = url.searchParams.get("secret");
-  const expected = process.env.DIAG_SECRET ?? process.env.REVIEW_SECRET;
+  const expected =
+    process.env.DIAG_SECRET ??
+    process.env.REVIEW_SECRET ??
+    process.env.TELEGRAM_WEBHOOK_SECRET ??
+    null;
   if (expected && provided !== expected) {
     return NextResponse.json(
       { ok: false, error: "unauthorized" },
