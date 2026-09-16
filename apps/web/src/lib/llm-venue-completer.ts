@@ -316,12 +316,52 @@ export function createLlmVenueCompleter(): JsonCompleter {
             });
           })();
 
-    const completion = await client.chat.completions.create({
-      model,
-      messages: resolvedMessages,
-      temperature: 0,
-      response_format: { type: "json_object" },
-    });
+    // Model fallback chain. xAI has been retiring grok vision snapshots
+    // (e.g. grok-2-vision-1212, then grok-2-vision). Try the env-configured
+    // model first, then a list of known stable aliases. The first one that
+    // returns 2xx is used; if every candidate returns 4xx "Model not found"
+    // we throw the last error so the caller surfaces a real failure.
+    const modelCandidates = Array.from(
+      new Set([
+        model,
+        "grok-2-vision-latest",
+        "grok-3-vision",
+        "grok-4-vision",
+        "grok-vision",
+      ]),
+    );
+
+    let completion;
+    let lastErr: unknown;
+    for (const candidate of modelCandidates) {
+      try {
+        completion = await client.chat.completions.create({
+          model: candidate,
+          messages: resolvedMessages,
+          temperature: 0,
+          response_format: { type: "json_object" },
+        });
+        if (candidate !== model) {
+          console.log(
+            `[llm-completer] primary '${model}' unavailable, used fallback '${candidate}'`,
+          );
+        }
+        break;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        const status = (err as { status?: number })?.status;
+        if (/model not found/i.test(msg) || status === 400 || status === 404) {
+          lastErr = err;
+          continue;
+        }
+        throw err;
+      }
+    }
+    if (!completion) {
+      throw lastErr instanceof Error
+        ? lastErr
+        : new Error(`All LLM candidates failed: ${modelCandidates.join(", ")}`);
+    }
 
     const content = completion.choices[0]?.message.content;
     if (!content) {
