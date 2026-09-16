@@ -134,28 +134,26 @@ export function createListingRepository(
       const cleanBase = supabaseUrl.replace(/\/$/, "");
 
       // Query 1: approved venue_drafts (most recent first). No embed.
-      const draftsParams = new URLSearchParams({
-        select:
-          "id,title,district,venue_name,area_type,start_date,end_date," +
-          "session_dates,price_text,price_amount_hkd,price_unit,booth_size_text," +
-          "contact_text,contact_whatsapp_link,has_aircon,photos,is_prime_spot," +
-          "is_cart_spot,allows_food,allows_dry_goods,allows_beauty,allows_service," +
-          "requires_product_approval,is_urgent,is_discounted,summary,report_count," +
-          "last_reviewed_at,created_at,is_featured,featured_at,is_link_reit,intake_item_id",
-        status: "eq.approved",
-        order: "created_at.desc",
-      });
-      const draftsUrl = `${cleanBase}/rest/v1/venue_drafts?${draftsParams.toString()}`;
-      const draftsRes = await fetch(draftsUrl, {
-        headers: {
-          apikey: asciiKey,
-          Authorization: `Bearer ${asciiKey}`,
-        },
-        cache: "no-store",
-      });
+      // NOTE: do NOT put the comma-separated select / in() clauses through
+      // URLSearchParams. It percent-encodes commas to %2C which PostgREST's
+      // path parser rejects with PGRST125. Build the query string by hand
+      // and only escape unsafe chars in scalar values.
+      const draftsSelect =
+        "id,title,district,venue_name,area_type,start_date,end_date," +
+        "session_dates,price_text,price_amount_hkd,price_unit,booth_size_text," +
+        "contact_text,contact_whatsapp_link,has_aircon,photos,is_prime_spot," +
+        "is_cart_spot,allows_food,allows_dry_goods,allows_beauty,allows_service," +
+        "requires_product_approval,is_urgent,is_discounted,summary,report_count," +
+        "last_reviewed_at,created_at,is_featured,featured_at,is_link_reit,intake_item_id";
+      const draftsQuery =
+        `select=${encodeURIComponent(draftsSelect)}` +
+        `&status=eq.approved` +
+        `&order=created_at.desc`;
+      const draftsRes = await supabaseRest(
+        `/rest/v1/venue_drafts?${draftsQuery}`,
+      );
       if (!draftsRes.ok) {
-        const body = await draftsRes.text().catch(() => "");
-        throw new Error(`Supabase ${draftsRes.status}: ${body.slice(0, 200)}`);
+        await expectOk(draftsRes, "listApprovedListings");
       }
       const drafts = (await draftsRes.json()) as Array<
         Omit<ApprovedListingRow, "intake"> & { intake_item_id: string | null }
@@ -176,18 +174,14 @@ export function createListingRepository(
         { source_label: string; source_url: string | null }
       >();
       if (intakeIds.length > 0) {
-        const intakeParams = new URLSearchParams({
-          select: "id,source_label,source_url",
-          id: `in.(${intakeIds.join(",")})`,
-        });
-        const intakeUrl = `${cleanBase}/rest/v1/intake_items?${intakeParams.toString()}`;
-        const intakeRes = await fetch(intakeUrl, {
-          headers: {
-            apikey: asciiKey,
-            Authorization: `Bearer ${asciiKey}`,
-          },
-          cache: "no-store",
-        });
+        // Same URLSearchParams caveat as Query 1: build the query string
+        // by hand so the in.(uuid1,uuid2,...) filter keeps literal commas.
+        const intakeQuery =
+          `select=${encodeURIComponent("id,source_label,source_url")}` +
+          `&id=in.(${intakeIds.map((id) => encodeURIComponent(id)).join(",")})`;
+        const intakeRes = await supabaseRest(
+          `/rest/v1/intake_items?${intakeQuery}`,
+        );
         if (intakeRes.ok) {
           const intakes = (await intakeRes.json()) as Array<{
             id: string;
