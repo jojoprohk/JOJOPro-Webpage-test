@@ -264,6 +264,14 @@ export function createLlmVenueCompleter(): JsonCompleter {
     const photoCount = images.length;
     // Build vision-ready payload: the final user message gets image parts
     // attached so the model can OCR venue details from Telegram photos.
+    // xAI vision models unavailable. Drop image content and run text-only.
+    // The Telegram intake route replies to the user asking for text-only
+    // when images are present (see intake/telegram/route.ts).
+    if (images.length > 0) {
+      console.log(
+        `[llm-completer] ${images.length} image(s) attached, dropping (text-only mode)`,
+      );
+    }
     const resolvedMessages: OpenAI.Chat.ChatCompletionMessageParam[] =
       images.length === 0
         ? (messages as OpenAI.Chat.ChatCompletionMessageParam[])
@@ -321,13 +329,18 @@ export function createLlmVenueCompleter(): JsonCompleter {
     // model first, then a list of known stable aliases. The first one that
     // returns 2xx is used; if every candidate returns 4xx "Model not found"
     // we throw the last error so the caller surfaces a real failure.
+    // Stage 1 launch: text-only. xAI retired every vision model name for
+    // this account (grok-2-vision, -latest, grok-3/4-vision, grok-vision
+    // all 400 Model not found), so we run on Grok text models and the
+    // caller drops image content below.
     const modelCandidates = Array.from(
       new Set([
         model,
-        "grok-2-vision-latest",
-        "grok-3-vision",
-        "grok-4-vision",
-        "grok-vision",
+        "grok-3",
+        "grok-3-latest",
+        "grok-2",
+        "grok-2-latest",
+        "grok-4",
       ]),
     );
 
