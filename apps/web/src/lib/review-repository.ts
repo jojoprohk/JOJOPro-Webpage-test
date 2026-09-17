@@ -155,52 +155,22 @@ export function createReviewRepository(
       const supabaseUrl = process.env.SUPABASE_URL || "";
       const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
-      // 1. Print env var lengths + scan for non-ASCII
-      console.log(`[review-drafts] SUPABASE_URL length=${supabaseUrl.length} SERVICE_ROLE_KEY length=${serviceRoleKey.length}`);
-      const scan = (label: string, s: string) => {
-        for (let i = 0; i < s.length; i++) {
-          if (s.charCodeAt(i) > 127) {
-            console.error(`[review-drafts] NON-ASCII in ${label} at index ${i}: charCode=${s.charCodeAt(i)}`);
-          }
-        }
-      };
-      scan("SUPABASE_URL", supabaseUrl);
-      scan("SERVICE_ROLE_KEY", serviceRoleKey);
+      // Route through supabaseRest — single source of truth for URL/key scrubbing
+      // and URL logging. The previous inline fetch path triggered Node 18 undici
+      // ByteString ("character at index 19 has a value of 8594") when Vercel's
+      // function runtime could not be bumped to Node 20 via package.json#engines.
+      console.log(`[review-drafts] node=${process.version} status=${status}`);
 
-      if (!supabaseUrl || !serviceRoleKey) {
-        throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
-      }
-
-      // 2. Build URL safely
-      const cleanBase = supabaseUrl.replace(/\/$/, "");
       const params = new URLSearchParams({
         select: "*",
         status: `eq.${status}`,
         order: "created_at.desc",
       });
-      const url = `${cleanBase}/rest/v1/venue_drafts?${params.toString()}`;
-
-      console.log(`[review-drafts] url length=${url.length}`);
-
-      // 3. Use Buffer to ASCII-encode the key (defensive — kill any non-ASCII bytes).
-      // If the original key has non-ASCII, this truncates at first bad char and we log it.
-      const asciiKey = serviceRoleKey.replace(/[^\x00-\x7f]/g, "?");
-      if (asciiKey !== serviceRoleKey) {
-        console.error(`[review-drafts] SERVICE_ROLE_KEY contained non-ASCII chars, replaced with '?'`);
-      }
-
-      const res = await fetch(url, {
-        headers: {
-          apikey: asciiKey,
-          Authorization: `Bearer ${asciiKey}`,
-        },
-        cache: "no-store",
-      });
-
-      if (!res.ok) {
-        const body = await res.text();
-        throw new Error(`Supabase ${res.status}: ${body.slice(0, 200)}`);
-      }
+      const res = await supabaseRest(
+        `/rest/v1/venue_drafts?${params.toString()}`,
+        { method: "GET" },
+      );
+      await expectOk(res, "listDrafts");
 
       const drafts = (await res.json()) as Omit<ReviewDraftRow, "intake">[];
       return drafts.map((d) => ({ ...d, intake: null } as ReviewDraftRow));
