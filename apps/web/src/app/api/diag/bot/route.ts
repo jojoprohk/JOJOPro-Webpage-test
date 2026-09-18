@@ -20,6 +20,19 @@ export const dynamic = "force-dynamic";
 // fallback order as the LLM diag: DIAG_SECRET → REVIEW_SECRET →
 // TELEGRAM_WEBHOOK_SECRET. Fail-closed when unset.
 export async function GET(request: Request) {
+  // Optional ?register=1 will additionally call Telegram setWebhook
+  // to (re)attach our endpoint. Auth still required (header secret
+  // is checked below before this branch executes).
+  const url = new URL(request.url);
+  const wantsRegister = url.searchParams.get("register") === "1";
+  // The webhook URL is the production Vercel domain (stable). For
+  // preview deploys the URL would change — we deliberately hardcode
+  // to prod because production is the only state we ever want the
+  // webhook attached to.
+  const WEBHOOK_URL =
+    "https://jojo-pro-webpage-test-web.vercel.app/api/intake/telegram";
+  const ALLOWED_UPDATES = ["message"];
+
   const expected =
     process.env.DIAG_SECRET ??
     process.env.REVIEW_SECRET ??
@@ -144,7 +157,7 @@ export async function GET(request: Request) {
     | { ok: false; description?: string }
     | null;
 
-  return NextResponse.json({
+  const responseBody: Record<string, unknown> = {
     ok: !!meOk,
     env: baseEnv,
     bot: meOk && meBody && "result" in meBody
@@ -160,5 +173,51 @@ export async function GET(request: Request) {
         "unknown"
       : null,
     webhook: webhookSummary,
-  });
+  };
+
+  if (wantsRegister) {
+    // Need the webhook secret to set it on the registration. Vercel's
+    // env was already validated above (auth secret fallback chain), so
+    // TELEGRAM_WEBHOOK_SECRET is either the same value or a separate
+    // one — read it directly.
+    const whSecret = process.env.TELEGRAM_WEBHOOK_SECRET ?? "";
+    try {
+      // Telegram's setWebhook uses secret_token (the literal name) as
+      // a query param. allowed_updates is a JSON array string.
+      const setUrl = new URL(`https://api.telegram.org/bot${token}/setWebhook`);
+      setUrl.searchParams.set("url", WEBHOOK_URL);
+      setUrl.searchParams.set("secret_token", whSecret);
+      setUrl.searchParams.set(
+        "allowed_updates",
+        JSON.stringify(ALLOWED_UPDATES),
+      );
+      setUrl.searchParams.set("drop_pending_updates", "false");
+      const regRes = await fetch(setUrl.toString(), { cache: "no-store" });
+      const regBody = (await regRes.json().catch(() => null)) as
+        | { ok: true; result: true; description?: string }
+        | { ok: false; description?: string; error_code?: number }
+        | null;
+      responseBody.registerWebhook = {
+        called: true,
+        targetUrl: WEBHOOK_URL,
+        httpStatus: regRes.status,
+        ok: regBody?.ok === true,
+        description: regBody && "description" in regBody ? regBody.description : null,
+      };
+    } catch (err) {
+      responseBody.registerWebhook = {
+        called: true,
+        targetUrl: WEBHOOK_URL,
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  } else {
+    responseBody.registerWebhook = {
+      called: false,
+      hint: "POST the same URL with ?register=1 (or GET) to re-attach the webhook",
+    };
+  }
+
+  return NextResponse.json(responseBody);
 }
