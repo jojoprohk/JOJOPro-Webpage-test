@@ -33,7 +33,9 @@ interface ProcessTelegramIntakeDeps {
   parseVenue?: typeof parseVenuePost;
   completeJson: JsonCompleter;
   repository: VenueRepository;
-  allowedChatIds?: number[];
+  // null = server misconfigured (env missing). Callers must surface a
+  // "server_misconfigured" error to the user and never accept the intake.
+  allowedChatIds?: number[] | null;
   fetchPhotos?: TelegramPhotoFetcher;
 }
 
@@ -55,6 +57,12 @@ export async function processTelegramIntake({
     };
   }
 
+  if (allowedChatIds === null) {
+    return {
+      status: "forbidden",
+      reason: "🚧 server misconfigured — TELEGRAM_ALLOWED_CHAT_IDS is unset; refusing to intake.",
+    };
+  }
   if (
     allowedChatIds.length > 0 &&
     !allowedChatIds.includes(parsedUpdate.chatId)

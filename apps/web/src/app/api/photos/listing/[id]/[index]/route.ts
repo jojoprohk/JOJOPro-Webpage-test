@@ -35,7 +35,12 @@ export async function GET(
       status: 200,
       headers: {
         "content-type": photo.mimeType,
-        "cache-control": "public, max-age=3600",
+        // Listing photos are served via a serverless route and can change
+        // any time an admin updates the venue (e.g. new Telegram photo,
+        // review upload, stock fallback swap). Never let a shared cache
+        // (Vercel CDN, browser) pin stale bytes — every request must
+        // re-fetch from Supabase / Telegram.
+        "cache-control": "private, no-store",
       },
     });
   } catch (error) {

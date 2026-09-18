@@ -8,18 +8,34 @@ export const dynamic = "force-dynamic";
 // models xAI (or whatever baseURL is configured) currently exposes. We
 // never echo the API key — only its length and a 4-char prefix.
 //
-// Auth: pass ?secret=<REVIEW_SECRET> (or set DIAG_SECRET in env). When no
-// secret is configured the endpoint is open — useful in dev, dangerous in
-// prod, so make sure REVIEW_SECRET is set before going live.
+// Auth: pass `x-diag-secret: <REVIEW_SECRET>` (or `Authorization: Bearer
+// <secret>`). The env order is DIAG_SECRET → REVIEW_SECRET →
+// TELEGRAM_WEBHOOK_SECRET. When no secret is configured the endpoint is
+// closed (500 server_misconfigured).
 export async function GET(request: Request) {
-  const url = new URL(request.url);
-  const provided = url.searchParams.get("secret");
+  // Auth via header only — never put REVIEW_SECRET in a URL query string:
+  // it would appear in Vercel access logs, browser history, and the Referer
+  // header on any cross-origin request. Order: explicit x-diag-secret header,
+  // then Authorization: Bearer, then env.
   const expected =
     process.env.DIAG_SECRET ??
     process.env.REVIEW_SECRET ??
     process.env.TELEGRAM_WEBHOOK_SECRET ??
     null;
-  if (expected && provided !== expected) {
+  if (!expected) {
+    return NextResponse.json(
+      { ok: false, error: "server_misconfigured" },
+      { status: 500 },
+    );
+  }
+  const headerSecret =
+    request.headers.get("x-diag-secret") ??
+    request.headers
+      .get("authorization")
+      ?.replace(/^Bearer\s+/i, "")
+      .trim() ??
+    null;
+  if (headerSecret !== expected) {
     return NextResponse.json(
       { ok: false, error: "unauthorized" },
       { status: 401 },

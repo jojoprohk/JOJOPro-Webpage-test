@@ -17,9 +17,12 @@ export function assertTelegramWebhookSecret(secret: string | null) {
   return timingSafeEqual(secretBuffer, expectedBuffer);
 }
 
-export function getTelegramAllowedChatIds() {
+// Returns null when TELEGRAM_ALLOWED_CHAT_IDS is unset. Callers MUST treat
+// null as "server misconfigured" and fail closed — previously this function
+// returned [] which the intake route read as "allow everyone" (fail-open).
+export function getTelegramAllowedChatIds(): number[] | null {
   const raw = process.env.TELEGRAM_ALLOWED_CHAT_IDS;
-  if (!raw) return [];
+  if (!raw) return null;
 
   return raw
     .split(",")

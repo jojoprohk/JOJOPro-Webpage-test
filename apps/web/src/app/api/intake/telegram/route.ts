@@ -64,7 +64,18 @@ export async function POST(request: Request) {
     const earlyParse = parseTelegramVenueUpdate(update);
     if (earlyParse.status !== "ignored") {
       const allowed = getTelegramAllowedChatIds();
-      if (allowed.length === 0 || allowed.includes(earlyParse.chatId)) {
+      if (allowed === null) {
+        // Server misconfigured — refuse. Send a clear reply (best effort)
+        // so the operator notices in Telegram, then keep returning 200 to
+        // avoid Telegram retrying the same update_id forever.
+        console.error(
+          "[telegram-intake] TELEGRAM_ALLOWED_CHAT_IDS is unset; refusing intake.",
+        );
+        void sendTelegramReply(
+          earlyParse.chatId,
+          "🚧 server misconfigured，請聯絡管理員。",
+        );
+      } else if (allowed.includes(earlyParse.chatId)) {
         // 即刻回 ack，唔阻 webhook 200。Fire-and-forget。
         void sendTelegramReply(
           earlyParse.chatId,
@@ -102,7 +113,7 @@ export async function POST(request: Request) {
     // 處理完再覆用戶摘要
     if (earlyParse.status !== "ignored") {
       const allowed = getTelegramAllowedChatIds();
-      if (allowed.length === 0 || allowed.includes(earlyParse.chatId)) {
+      if (allowed !== null && allowed.includes(earlyParse.chatId)) {
         const chatId = earlyParse.chatId;
         console.log(`[intake-route] result.status=${result.status} venueCount=${result.venueCount} reason=${result.reason ?? "(none)"}`);
         try {

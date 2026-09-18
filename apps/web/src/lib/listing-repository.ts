@@ -5,6 +5,23 @@ import type { PublicListing } from "./listing-types.js";
 
 // 資料庫 row（snake_case）→ 公開 DTO（camelCase）。
 // 只揀可以公開嘅欄位；raw_content／信心／審核內部欄位一律唔喺呢度出現。
+// 公開 listing 嘅 source URL 只可以係 http(s)。其他 scheme 一律 drop 做
+// null，避免 javascript: / data: 之類嘅 URL 喺 listing-card 嘅 <a href>
+// 變成 XSS vector。Input 可能嚟自 Telegram forward（user controlled），
+// 所以喺 DTO mapping 層做最後一道防線。
+export function safeHttpUrl(raw: string | null | undefined): string | null {
+  if (raw === null || raw === undefined) return null;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return null;
+  try {
+    const u = new URL(trimmed);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
 interface ApprovedListingRow {
   id: string;
   title: string;
@@ -72,7 +89,7 @@ export function mapRowToPublicListing(row: ApprovedListingRow): PublicListing {
     isDiscounted: row.is_discounted,
     summary: row.summary,
     sourceLabel: row.intake?.source_label ?? "未知來源",
-    sourceUrl: row.intake?.source_url ?? null,
+    sourceUrl: safeHttpUrl(row.intake?.source_url),
     lastReviewedAt: row.last_reviewed_at,
     reportCount: row.report_count ?? 0,
     createdAt: row.created_at,
