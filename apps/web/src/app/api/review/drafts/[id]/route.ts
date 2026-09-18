@@ -85,6 +85,27 @@ export async function PATCH(
   }
   try {
     await repository.updateDraft(id, row);
+
+    // toggle_featured 後即時 enforce 5 個 featured window，
+    // 防止 admin 重覆 click / hand-edit 產生超過 5 個 featured。
+    // RPC 係 idempotent，no-op when 已係 <= 5。
+    if (action === "toggle_featured") {
+      try {
+        const demoted = await repository.enforceFeaturedWindow();
+        if (demoted > 0) {
+          console.log(
+            `[review-draft] featured-window demoted ${demoted} row(s)`,
+          );
+        }
+      } catch (windowErr) {
+        // Non-fatal: toggle 本身已成功，視窗約束只係 housekeeping。
+        console.warn(
+          "[review-draft] enforceFeaturedWindow failed (non-fatal):",
+          windowErr,
+        );
+      }
+    }
+
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("[review-draft] update failed:", error);

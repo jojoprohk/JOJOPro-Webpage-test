@@ -141,6 +141,9 @@ export interface ReviewDraftRow {
 export interface ReviewRepository {
   listDrafts(status: string): Promise<ReviewDraftRow[]>;
   updateDraft(id: string, row: Record<string, unknown>): Promise<void>;
+  // Demotes is_featured=true approved rows that fall outside the top 5
+  // by featured_at DESC. Returns the number of rows demoted.
+  enforceFeaturedWindow(): Promise<number>;
 }
 
 export function createReviewRepository(
@@ -183,6 +186,20 @@ export function createReviewRepository(
         { method: "PATCH", body: JSON.stringify(row) },
       );
       await expectOk(res, "updateDraft");
+    },
+
+    async enforceFeaturedWindow() {
+      // RPC: enforce_featured_window() defined in migration
+      // 202609180003_pre_launch_safety.sql. Idempotent -- no-op when <= 5
+      // rows are featured.
+      const res = await supabaseRest("/rest/v1/rpc/enforce_featured_window", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      await expectOk(res, "enforceFeaturedWindow");
+      const data = (await res.json()) as number;
+      return Number(data);
     },
   };
 }
