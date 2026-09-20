@@ -9,20 +9,36 @@ export function todayInHongKong(now: Date = new Date()): string {
   return hkTime.toISOString().slice(0, 10);
 }
 
-// 完全過期：最遲開檔日都早過今日。
-// 連續檔用 end_date（冇 end_date 用 start_date）；斷續檔用 session_dates 最遲一日。
-// 完全冇日期資料唔當過期（唔好靜默隱藏）。
+// 完全過期：所有日子都喺今日之前。
+//
+// 5 個 case：
+//   1. 斷續檔 session_dates：今日喺 list 入面 OR 入面有 future date → 已 active；
+//      全部都 < today → expired。
+//   2. 連續檔 start + end：今日喺 [start, end] 之內 → 已 active（横跨進行中嘅 listing）；
+//      否則睇 end 過咗未。
+//   3. 只有 end：end < today → expired；否則 active。
+//   4. 只有 start（一日 event）：start < today → expired；否則 active。
+//   5. 完全冇日期資料 → 唔當過期（唔好靜默隱藏）。
 export function isExpired(listing: PublicListing, today: string): boolean {
   const sessions = listing.sessionDates ?? [];
   if (sessions.length > 0) {
+    if (sessions.includes(today)) return false;
     const latest = sessions[sessions.length - 1] as string;
     return latest < today;
   }
-  const last = listing.endDate ?? listing.startDate;
-  if (last === null) {
-    return false;
+  const start = listing.startDate;
+  const end = listing.endDate;
+  if (start !== null && end !== null) {
+    if (start <= today && today <= end) return false;
+    return end < today;
   }
-  return last < today;
+  if (end !== null) {
+    return end < today;
+  }
+  if (start !== null) {
+    return start < today;
+  }
+  return false;
 }
 
 // 某一日係咪有檔：
