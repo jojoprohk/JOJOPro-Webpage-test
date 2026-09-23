@@ -12,6 +12,7 @@ import {
   createVenueRepository,
 } from "../../../../lib/venue-repository";
 import { sendTelegramReply } from "../../../../lib/telegram-bot";
+import { captureIntakeFailure } from "../../../../lib/error-log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -100,6 +101,10 @@ export async function POST(request: Request) {
     } catch (intakeErr) {
       console.error("[telegram-intake] processing failed:", intakeErr);
       if (earlyParse.status !== "ignored") {
+        captureIntakeFailure("telegram-intake", intakeErr, {
+          chatId: earlyParse.chatId,
+          updateId: update.update_id,
+        });
         void sendTelegramReply(
           earlyParse.chatId,
           "❌ AI 處理失敗，請稍後重試或聯絡管理員。",
@@ -141,6 +146,11 @@ export async function POST(request: Request) {
           }
         } catch (replyErr) {
           console.error("[intake-route] final reply delivery failed:", replyErr);
+          captureIntakeFailure(
+            "telegram-intake",
+            replyErr,
+            { chatId: earlyParse.chatId, updateId: update.update_id },
+          );
         }
       }
     }
@@ -151,6 +161,7 @@ export async function POST(request: Request) {
     // we MUST return 200 to Telegram so it does not retry the same update_id
     // forever. The real cause is already logged above.
     console.error("[telegram-intake] handler crashed:", error);
+    captureIntakeFailure("telegram-intake", error, {});
     return NextResponse.json({ ok: true, status: "handler_crashed" });
   }
 }

@@ -14,6 +14,7 @@
 //     from the row's expires_at.
 
 import { supabaseRest } from "./supabase-rest.js";
+import { captureIntakeFailure } from "./error-log.js";
 
 type RateLimitConfig = {
   windowSec: number;
@@ -70,6 +71,7 @@ export async function rateLimit(
       `[rate-limit:${bucket}] fetch threw, allowing request (fail-open):`,
       err,
     );
+    captureIntakeFailure("rate-limit", err, { bucket });
     return {
       allowed: true,
       count: 0,
@@ -99,6 +101,11 @@ export async function rateLimit(
     console.warn(
       `[rate-limit:${bucket}] upsert failed, allowing request (fail-open): ${res.status} ${text.slice(0, 200)}`,
     );
+    captureIntakeFailure("rate-limit", new Error(`upsert ${res.status}`), {
+      bucket,
+      status: res.status,
+      body: text.slice(0, 200),
+    });
     return {
       allowed: true,
       count: 0,
