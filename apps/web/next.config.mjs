@@ -8,6 +8,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const nextConfig = {
   transpilePackages: ["@jojopro/ai"],
   outputFileTracingRoot: path.join(__dirname, "../../"),
+  env: {
+    // Next.js only exposes NEXT_PUBLIC_* values to browser bundles. The DSN
+    // is client-safe, so bridge the existing SENTRY_DSN value for the client
+    // instrumentation file while keeping one source of truth in Vercel.
+    NEXT_PUBLIC_SENTRY_DSN:
+      process.env.NEXT_PUBLIC_SENTRY_DSN ?? process.env.SENTRY_DSN ?? "",
+  },
   webpack: (config) => {
     config.resolve.alias["@jojopro/ai"] = path.join(
       __dirname,
