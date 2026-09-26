@@ -1098,6 +1098,72 @@ a { color: var(--ink); }
 }
 .approved-meta svg { flex: 0 0 auto; margin-top: 3px; width: 15px; height: 15px; color: var(--pink); }
 .approved-sub { font-size: 13px; color: var(--muted); line-height: 1.6; }
+.approved-actions,
+.rejected-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+.btn-toggle-featured,
+.btn-edit,
+.btn-unlist {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 8px 13px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.btn-toggle-featured:hover:not(:disabled),
+.btn-edit:hover:not(:disabled) { background: var(--tint); }
+.btn-toggle-featured.is-on { background: var(--low-tint); border-color: var(--yellow); color: var(--low-ink); }
+.btn-unlist { color: var(--danger-ink); border-color: var(--rule); }
+.btn-unlist:hover:not(:disabled) { background: var(--danger-tint); border-color: var(--danger); }
+.btn-toggle-featured:disabled,
+.btn-edit:disabled,
+.btn-unlist:disabled { opacity: .45; cursor: default; }
+.btn-toggle-featured svg,
+.btn-edit svg,
+.btn-unlist svg { width: 15px; height: 15px; }
+.approved-error { margin-top: 10px; color: var(--danger-ink); font-size: 13px; font-weight: 700; }
+
+.rejected-card { border-color: var(--danger); }
+.rejected-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 9px;
+  border: 1px solid var(--danger);
+  background: var(--danger-tint);
+  color: var(--danger-ink);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.rejected-confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 13px 14px;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  background: var(--danger-tint);
+  color: var(--danger-ink);
+  font-size: 13px;
+}
+.rejected-confirm > svg { flex: 0 0 auto; width: 18px; height: 18px; margin-top: 1px; }
+.rejected-confirm p { margin: 4px 0 0; line-height: 1.55; color: var(--ink-2); }
+.rejected-confirm .rejected-actions { margin: 0 0 0 auto; }
 
 /* ---------- Mobile ---------- */
 @media (max-width: 720px) {
@@ -1118,6 +1184,8 @@ a { color: var(--ink); }
   .tab:last-child { border-bottom: 0; }
   .batch-bar { bottom: 0; }
   .batch-msg { margin-left: 0; width: 100%; }
+  .rejected-confirm { flex-direction: column; }
+  .rejected-confirm .rejected-actions { margin: 4px 0 0; }
   .login-card { margin-top: 36px; padding: 28px 22px; }
 }
 

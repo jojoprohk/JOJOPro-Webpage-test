@@ -10,6 +10,7 @@ import {
   X,
   ImagePlus,
   Star,
+  EyeOff,
 } from "lucide-react";
 import {
   AREA_LABELS,
@@ -25,6 +26,7 @@ import type { VenuePhoto } from "@jojopro/ai";
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 type FeaturedStatus = "idle" | "toggling" | "error";
+type DownlistStatus = "idle" | "working" | "error";
 
 // 已批准（已上線）草稿嘅管理卡：
 // 1. 預設係唯讀摘要
@@ -34,9 +36,11 @@ type FeaturedStatus = "idle" | "toggling" | "error";
 export function ApprovedCard({
   draft,
   onChanged,
+  onDownlisted,
 }: {
   draft: Draft;
   onChanged?: (next: Draft) => void;
+  onDownlisted?: (id: string) => void;
 }) {
   const photoCount = draftPhotos(draft).length;
   const sessions = draft.session_dates ?? [];
@@ -55,6 +59,8 @@ export function ApprovedCard({
   const [saveError, setSaveError] = useState("");
   const [featuredStatus, setFeaturedStatus] = useState<FeaturedStatus>("idle");
   const [featuredError, setFeaturedError] = useState("");
+  const [downlistStatus, setDownlistStatus] = useState<DownlistStatus>("idle");
+  const [downlistError, setDownlistError] = useState("");
   const [isFeatured, setIsFeatured] = useState<boolean>(draft.is_featured);
   const [featuredAt, setFeaturedAt] = useState<string | null>(draft.featured_at);
 
@@ -155,6 +161,34 @@ export function ApprovedCard({
     }
   };
 
+  const downlist = async () => {
+    if (
+      !window.confirm(
+        "確定將此場地從公開頁下架？之後會移至「已下架」，可再永久刪除。",
+      )
+    ) {
+      return;
+    }
+
+    setDownlistStatus("working");
+    setDownlistError("");
+    try {
+      const res = await fetch(`/api/review/drafts/${draft.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "reject" }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error ?? `HTTP ${res.status}`);
+      }
+      onDownlisted?.(draft.id);
+    } catch (e) {
+      setDownlistError(e instanceof Error ? e.message : "下架失敗");
+      setDownlistStatus("error");
+    }
+  };
+
   // ── 摘要 view ──
   if (!editing) {
     return (
@@ -195,7 +229,7 @@ export function ApprovedCard({
             type="button"
             className={`btn-toggle-featured${isFeatured ? " is-on" : ""}`}
             onClick={() => void toggleFeatured()}
-            disabled={featuredStatus === "toggling"}
+            disabled={featuredStatus === "toggling" || downlistStatus === "working"}
           >
             {isFeatured ? <Star /> : <Sparkles />}
             {featuredStatus === "toggling"
@@ -212,9 +246,21 @@ export function ApprovedCard({
             <Pencil />
             編輯資料
           </button>
+          <button
+            type="button"
+            className="btn-unlist"
+            onClick={() => void downlist()}
+            disabled={downlistStatus === "working" || featuredStatus === "toggling"}
+          >
+            <EyeOff />
+            {downlistStatus === "working" ? "下架中…" : "下架"}
+          </button>
         </div>
         {featuredStatus === "error" ? (
           <div className="approved-error">{featuredError}</div>
+        ) : null}
+        {downlistStatus === "error" ? (
+          <div className="approved-error">{downlistError}</div>
         ) : null}
       </div>
     );

@@ -4,10 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ClipboardCheck, Lock, ArrowLeft, CheckCircle2, XCircle, Search } from "lucide-react";
 import { DraftCard, type CardAct } from "./draft-card";
 import { ApprovedCard } from "./approved-card";
+import { RejectedCard } from "./rejected-card";
 import { Reveal, RevealGrid } from "../components/motion.js";
 import type { Draft } from "./review-lib";
 
-type Tab = "pending" | "approved";
+type Tab = "pending" | "approved" | "rejected";
 
 export default function ReviewPage() {
   const [authed, setAuthed] = useState<boolean | null>(null);
@@ -18,6 +19,7 @@ export default function ReviewPage() {
   const [tab, setTab] = useState<Tab>("pending");
   const [drafts, setDrafts] = useState<Draft[] | null>(null);
   const [approved, setApproved] = useState<Draft[] | null>(null);
+  const [rejected, setRejected] = useState<Draft[] | null>(null);
   const [loadError, setLoadError] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [batchBusy, setBatchBusy] = useState(false);
@@ -37,25 +39,48 @@ export default function ReviewPage() {
     );
   }, []);
 
+  const handleDownlisted = useCallback((id: string) => {
+    setApproved((prev) => (prev ?? []).filter((d) => d.id !== id));
+    setRejected((prev) => {
+      const moved = (approved ?? []).find((d) => d.id === id);
+      if (!moved) return prev;
+      return [
+        { ...moved, last_reviewed_at: new Date().toISOString() },
+        ...(prev ?? []).filter((d) => d.id !== id),
+      ];
+    });
+  }, [approved]);
+
+  const handleRejectedDeleted = useCallback((id: string) => {
+    setRejected((prev) => (prev ?? []).filter((d) => d.id !== id));
+  }, []);
+
   const load = useCallback(async () => {
     setLoadError("");
     try {
-      const [pendingRes, approvedRes] = await Promise.all([
+      const [pendingRes, approvedRes, rejectedRes] = await Promise.all([
         fetch("/api/review/drafts?status=needs_review", { cache: "no-store" }),
         fetch("/api/review/drafts?status=approved", { cache: "no-store" }),
+        fetch("/api/review/drafts?status=rejected", { cache: "no-store" }),
       ]);
-      if (pendingRes.status === 401 || approvedRes.status === 401) {
+      if (
+        pendingRes.status === 401 ||
+        approvedRes.status === 401 ||
+        rejectedRes.status === 401
+      ) {
         setAuthed(false);
         return;
       }
-      if (!pendingRes.ok || !approvedRes.ok) {
+      if (!pendingRes.ok || !approvedRes.ok || !rejectedRes.ok) {
         setLoadError("載入草稿失敗，請重試。");
         return;
       }
       const pendingData = (await pendingRes.json()) as { drafts?: Draft[] };
       const approvedData = (await approvedRes.json()) as { drafts?: Draft[] };
+      const rejectedData = (await rejectedRes.json()) as { drafts?: Draft[] };
       setDrafts(pendingData.drafts ?? []);
       setApproved(approvedData.drafts ?? []);
+      setRejected(rejectedData.drafts ?? []);
       setAuthed(true);
     } catch {
       setLoadError("載入失敗，請檢查網絡。");
@@ -230,6 +255,14 @@ export default function ReviewPage() {
           已批准
           <span className="tab-count">{approvedList.length}</span>
         </button>
+        <button
+          type="button"
+          onClick={() => setTab("rejected")}
+          className={"tab" + (tab === "rejected" ? " tab--active" : "")}
+        >
+          已下架
+          <span className="tab-count">{rejected?.length ?? 0}</span>
+        </button>
       </div>
 
       {loadError && <p className="review-error">{loadError}</p>}
@@ -300,7 +333,7 @@ export default function ReviewPage() {
             </Reveal>
           )}
         </>
-      ) : (
+      ) : tab === "approved" ? (
         <>
           {approved === null && <p className="loading">載入中…</p>}
           <div className="review-search">
@@ -327,7 +360,33 @@ export default function ReviewPage() {
           {approved !== null && filteredApproved.length > 0 && (
             <RevealGrid>
               {filteredApproved.map((d) => (
-                <ApprovedCard key={d.id} draft={d} onChanged={updateApproved} />
+                <ApprovedCard
+                  key={d.id}
+                  draft={d}
+                  onChanged={updateApproved}
+                  onDownlisted={handleDownlisted}
+                />
+              ))}
+            </RevealGrid>
+          )}
+        </>
+      ) : (
+        <>
+          <p className="review-hint">
+            呢啲資料已經從公開頁下架。永久刪除無法復原，亦唔會自動刪除相關 intake 或 storage 相。
+          </p>
+          {rejected === null && <p className="loading">載入中…</p>}
+          {rejected !== null && rejected.length === 0 && (
+            <p className="notice">冇已下架資料。</p>
+          )}
+          {rejected !== null && rejected.length > 0 && (
+            <RevealGrid>
+              {rejected.map((d) => (
+                <RejectedCard
+                  key={d.id}
+                  draft={d}
+                  onDeleted={handleRejectedDeleted}
+                />
               ))}
             </RevealGrid>
           )}
